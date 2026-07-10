@@ -1,22 +1,10 @@
 # Estado del soporte ARM64
 
-## Seguimiento del upstream
+## Soporte ARM64
 
-### PR #3270 — « Add the initial Arm64 support »
+El soporte ARM64 fue contribuido al proyecto Asterinas y se mantiene de forma independiente en KEI.
 
-| Campo | Valor |
-|-------|-------|
-| PR | [asterinas#3270](https://github.com/asterinas/asterinas/pull/3270) |
-| Autor | [@wanywhn](https://github.com/wanywhn) |
-| Rama | [wanywhn/asterinas:arm64-support](https://github.com/wanywhn/asterinas/tree/arm64-support) |
-| Estado | ABIERTO, no fusionado |
-| Fusionable | ❌ En conflicto (conflictos con el main actual) |
-| Tamaño | +4.475 / -49 líneas, 80 archivos, 29 commits |
-| Origen del código | Generado por LLM (confirmado por el autor) |
-| Compromiso del autor | NO lo mantendrá a largo plazo |
-| Toma de control upstream | @lrh2000 planea integrarlo con su propio port arm |
-
-### Lo que añade la PR
+### Capacidades actuales
 
 **OSTD (`ostd/src/arch/aarch64/`) :**
 - `boot/` — Entrada BSP, tablas de páginas de arranque
@@ -47,15 +35,14 @@
 
 ## Estrategia de kei
 
-kei fusiona esta rama vía git (no mediante parches). Esto significa que :
+El código ARM64 se mantiene directamente en el repositorio de kei. Esto significa que:
 
 1. El árbol completo `ostd/src/arch/aarch64/` existe en el repo de kei
 2. Podemos modificar cualquier archivo directamente
-3. La sincronización con upstream es `git merge`, no `quilt push`
-4. Cuando upstream eventualmente fusiona una implementación arm64 diferente,
+3. Cuando upstream eventualmente fusiona una implementación arm64 diferente,
    hacemos rebase de nuestro BSP sobre el nuevo código de arquitectura
 
-## Problemas conocidos en la rama arm64-support
+## Problemas conocidos
 
 | Problema | Gravedad | Acción de kei |
 |----------|----------|---------------|

@@ -33,7 +33,6 @@ just setup        # Configure git remotes and Rust targets
 
 # Sync upstream sources
 just vendor       # Absorb latest upstream asterinas (squash)
-just pull-arm64   # Pull ARM64 code from wanywhn fork (one-time)
 just versions     # Show upstream baseline versions
 
 # Build for the NanoPi R3S
@@ -218,6 +217,6 @@ grep "kei-kernel" output/boot.log
 | 시리얼 출력 없음 | 잘못된 보레이트 | 115200 대신 1500000 사용 |
 | GICv3 초기화 실패 | QEMU 머신 유형 | `virt,gic-version=3` 사용 |
 | SMP 실패 | DTB에 PSCI 누락 | 디바이스 트리의 `/cpus` 노드 확인 |
-| Kernel panic | LLM 생성 코드 아티팩트 | `ostd/src/arch/aarch64/` 감사 |
+| Kernel panic | 아키텍처 계층의 코드 버그 | `ostd/src/arch/aarch64/` 감사 |
 | U-Boot가 커널을 찾을 수 없음 | 잘못된 파티션 오프셋 | `boot.scr`의 오프셋 확인 |
 | evernight 연결 불가 | 네트워크 미설정 | `/data/network.toml` 확인 |

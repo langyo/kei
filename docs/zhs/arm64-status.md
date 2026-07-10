@@ -1,22 +1,10 @@
 # ARM64 支持状态
 
-## 上游跟踪
+## ARM64 支持
 
-### PR #3270 —— "Add the initial Arm64 support"
+ARM64 支持已贡献给 Asterinas 项目，并在 KEI 中独立维护。
 
-| Field | Value |
-|------|-------|
-| PR | [asterinas#3270](https://github.com/asterinas/asterinas/pull/3270) |
-| Author | [@wanywhn](https://github.com/wanywhn) |
-| Branch | [wanywhn/asterinas:arm64-support](https://github.com/wanywhn/asterinas/tree/arm64-support) |
-| State | OPEN, not merged |
-| Mergeable | ❌ Dirty (conflicts with current main) |
-| Size | +4,475 / -49 lines, 80 files, 29 commits |
-| Code origin | LLM-generated (author confirmed) |
-| Author commitment | Will NOT maintain long-term |
-| Upstream takeover | @lrh2000 plans to integrate with his own arm port |
-
-### 该 PR 新增的内容
+### 当前能力
 
 **OSTD (`ostd/src/arch/aarch64/`):**
 - `boot/` — BSP 入口，启动页表
@@ -47,14 +35,13 @@
 
 ## kei 的策略
 
-kei 通过 git 合并该分支（而非补丁）。这意味着：
+ARM64 代码直接在 kei 仓库中维护。这意味着：
 
 1. 完整的 `ostd/src/arch/aarch64/` 目录树存在于 kei 仓库中
 2. 我们可以直接修改任意文件
-3. 上游同步使用 `git merge`，而非 `quilt push`
-4. 当上游最终合并不同的 arm64 实现时，我们将 BSP 变基到新的架构代码之上
+3. 当上游最终合并不同的 arm64 实现时，我们将 BSP 变基到新的架构代码之上
 
-## arm64-support 分支中的已知问题
+## 已知问题
 
 | Issue | Severity | kei Action |
 |-------|----------|------------|

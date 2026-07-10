@@ -32,8 +32,7 @@ flowchart LR
 just setup        # Configure git remotes and Rust targets
 
 # Sync upstream sources
-just vendor       # Absorb latest upstream asterinas (squash)
-just pull-arm64   # Pull ARM64 code from wanywhn fork (one-time)
+just vendor       # Absorb latest upstream asterinas
 just versions     # Show upstream baseline versions
 
 # Build for the NanoPi R3S
@@ -217,6 +216,6 @@ grep "kei-kernel" output/boot.log
 | No serial output | Wrong baud rate | Use 1500000, not 115200 |
 | GICv3 init failed | QEMU machine type | Use `virt,gic-version=3` |
 | SMP failed | Missing PSCI in DTB | Check `/cpus` node in device tree |
-| Kernel panic | LLM-generated code artifact | Audit `ostd/src/arch/aarch64/` |
+| Kernel panic | Code bug in arch layer | Audit `ostd/src/arch/aarch64/` |
 | U-Boot can't find kernel | Wrong partition offset | Verify offset in `boot.scr` |
 | evernight can't connect | Network not configured | Check `/data/network.toml` |

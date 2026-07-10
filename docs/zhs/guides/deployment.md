@@ -33,7 +33,6 @@ just setup        # Configure git remotes and Rust targets
 
 # Sync upstream sources
 just vendor       # Absorb latest upstream asterinas (squash)
-just pull-arm64   # Pull ARM64 code from wanywhn fork (one-time)
 just versions     # Show upstream baseline versions
 
 # Build for the NanoPi R3S
@@ -216,6 +215,6 @@ grep "kei-kernel" output/boot.log
 | 无串口输出 | 波特率错误 | 使用 1500000，而非 115200 |
 | GICv3 初始化失败 | QEMU 机器类型 | 使用 `virt,gic-version=3` |
 | SMP 失败 | DTB 中缺少 PSCI | 检查设备树中的 `/cpus` 节点 |
-| Kernel panic | LLM 生成的代码工件 | 审计 `ostd/src/arch/aarch64/` |
+| Kernel panic | 架构层代码缺陷 | 审计 `ostd/src/arch/aarch64/` |
 | U-Boot 找不到内核 | 分区偏移错误 | 检查 `boot.scr` 中的偏移量 |
 | evernight 无法连接 | 网络未配置 | 检查 `/data/network.toml` |

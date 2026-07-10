@@ -1,22 +1,10 @@
 # ARM64 サポート状況
 
-## 上流追跡
+## ARM64 サポート
 
-### PR #3270 —— "Add the initial Arm64 support"
+ARM64 サポートは Asterinas プロジェクトに貢献され、KEI で独立してメンテナンスされています。
 
-| Field | Value |
-|------|-------|
-| PR | [asterinas#3270](https://github.com/asterinas/asterinas/pull/3270) |
-| Author | [@wanywhn](https://github.com/wanywhn) |
-| Branch | [wanywhn/asterinas:arm64-support](https://github.com/wanywhn/asterinas/tree/arm64-support) |
-| State | OPEN, not merged |
-| Mergeable | ❌ Dirty (conflicts with current main) |
-| Size | +4,475 / -49 lines, 80 files, 29 commits |
-| Code origin | LLM-generated (author confirmed) |
-| Author commitment | Will NOT maintain long-term |
-| Upstream takeover | @lrh2000 plans to integrate with his own arm port |
-
-### この PR が追加するもの
+### 現在の機能
 
 **OSTD (`ostd/src/arch/aarch64/`):**
 - `boot/` — BSP エントリ、ブートページテーブル
@@ -47,14 +35,13 @@
 
 ## kei の戦略
 
-kei はこのブランチを git でマージします（パッチではありません）。これは次を意味します：
+ARM64 コードは kei のリポジトリで直接メンテナンスされています。これは次を意味します：
 
 1. 完全な `ostd/src/arch/aarch64/` ツリーが kei のリポジトリに存在します
 2. 任意のファイルを直接変更できます
-3. 上流同期は `git merge` であり、`quilt push` ではありません
-4. 上流が最終的に異なる arm64 実装をマージした場合、新しいアーキテクチャコードの上に BSP をリベースします
+3. 上流が最終的に異なる arm64 実装をマージした場合、新しいアーキテクチャコードの上に BSP をリベースします
 
-## arm64-support ブランチの既知の問題
+## 既知の問題
 
 | Issue | Severity | kei Action |
 |-------|----------|------------|

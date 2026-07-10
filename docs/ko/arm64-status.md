@@ -1,22 +1,10 @@
 # ARM64 지원 현황
 
-## 상류 추적
+## ARM64 지원
 
-### PR #3270 —— "Add the initial Arm64 support"
+ARM64 지원은 Asterinas 프로젝트에 기여되었으며 KEI에서 독립적으로 유지 관리됩니다.
 
-| Field | Value |
-|------|-------|
-| PR | [asterinas#3270](https://github.com/asterinas/asterinas/pull/3270) |
-| Author | [@wanywhn](https://github.com/wanywhn) |
-| Branch | [wanywhn/asterinas:arm64-support](https://github.com/wanywhn/asterinas/tree/arm64-support) |
-| State | OPEN, not merged |
-| Mergeable | ❌ Dirty (conflicts with current main) |
-| Size | +4,475 / -49 lines, 80 files, 29 commits |
-| Code origin | LLM-generated (author confirmed) |
-| Author commitment | Will NOT maintain long-term |
-| Upstream takeover | @lrh2000 plans to integrate with his own arm port |
-
-### 이 PR이 추가하는 내용
+### 현재 기능
 
 **OSTD (`ostd/src/arch/aarch64/`):**
 - `boot/` — BSP 진입점, 부트 페이지 테이블
@@ -47,14 +35,13 @@
 
 ## kei의 전략
 
-kei는 이 브랜치를 git으로 병합합니다(패치가 아님). 이는 다음을 의미합니다:
+ARM64 코드는 kei 리포지토리에서 직접 유지 관리됩니다. 이는 다음을 의미합니다:
 
 1. 전체 `ostd/src/arch/aarch64/` 트리가 kei 리포지토리에 존재합니다
 2. 모든 파일을 직접 수정할 수 있습니다
-3. 상류 동기화는 `quilt push`가 아닌 `git merge`입니다
-4. 상류가 결국 다른 arm64 구현을 병합하면, 새 아키텍처 코드 위에 BSP를 리베이스합니다
+3. 상류가 결국 다른 arm64 구현을 병합하면, 새 아키텍처 코드 위에 BSP를 리베이스합니다
 
-## arm64-support 브랜치의 알려진 문제
+## 알려진 문제
 
 | Issue | Severity | kei Action |
 |-------|----------|------------|
