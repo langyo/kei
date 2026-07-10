@@ -46,12 +46,10 @@ El código ARM64 se mantiene directamente en el repositorio de kei. Esto signifi
 
 | Problema | Gravedad | Acción de kei |
 |----------|----------|---------------|
-| Todo el código generado por LLM | Alta | Auditoría M2: revisar cada archivo, corregir artefactos |
+| El código necesita auditoría y refuerzo | Alta | Auditoría M2: revisar cada archivo |
 | Crate GICv3 de terceros | Media | Reemplazar por driver interno |
 | Tests solo en QEMU | Alta | Arranque en hardware real NanoPi R3S |
 | Sin SMP/multi-núcleo | Media | Añadir arranque de CPU secundario vía PSCI |
-| Desactualizado (por detrás del main upstream) | Baja | Rebase de sincronización regular |
-| Comentarios verbosos de estilo LLM | Baja | Limpiar durante la auditoría |
 
 ## Matriz de tests QEMU
 

@@ -46,12 +46,10 @@ The ARM64 code is maintained directly in kei's repository. This means:
 
 | Issue | Severity | kei Action |
 |-------|----------|------------|
-| All code LLM-generated | High | M2 audit: review every file, fix artifacts |
+| Code needs audit and hardening | High | M2 audit: review every file, fix issues |
 | Third-party GICv3 crate | Medium | Replace with in-tree driver |
 | QEMU-only testing | High | Real hardware boot on NanoPi R3S |
 | No SMP/multi-core | Medium | Add PSCI secondary CPU bring-up |
-| Stale (behind upstream main) | Low | Regular sync rebase |
-| LLM-style verbose comments | Low | Clean up during audit |
 
 ## QEMU Test Matrix
 

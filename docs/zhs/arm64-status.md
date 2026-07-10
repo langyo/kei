@@ -45,12 +45,10 @@ ARM64 代码直接在 kei 仓库中维护。这意味着：
 
 | Issue | Severity | kei Action |
 |-------|----------|------------|
-| All code LLM-generated | High | M2 audit: review every file, fix artifacts |
-| Third-party GICv3 crate | Medium | Replace with in-tree driver |
-| QEMU-only testing | High | Real hardware boot on NanoPi R3S |
-| No SMP/multi-core | Medium | Add PSCI secondary CPU bring-up |
-| Stale (behind upstream main) | Low | Regular sync rebase |
-| LLM-style verbose comments | Low | Clean up during audit |
+| 代码需审查与加固 | High | M2 audit: 逐文件审查 |
+| GICv3 第三方 crate | Medium | 替换为内置驱动 |
+| 仅 QEMU 测试 | High | 在 NanoPi R3S 上真机启动 |
+| 无 SMP/多核 | Medium | 添加 PSCI 次级 CPU 启动 |
 
 ## QEMU 测试矩阵
 
