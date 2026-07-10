@@ -25,7 +25,7 @@
 
 ## 4. 近期进展
 
-### virtio-gpu 黑屏根因修正 + 双初始化修复（2026-07-10）🐛
+### virtio-gpu 黑屏根因修正 + 双初始化修复（2026-07-10 → 07-11 修正）🐛
 
 **修正了长期被误判为「QEMU TCG used-ring bug」的黑屏根因。**
 
@@ -37,7 +37,15 @@
 
 **修复**：在 transport 循环中，若 raw probe 已声明 GPU（`is_ready()` 为真），则跳过该设备的复位与重初始化（`continue`），保持 raw probe 建立的 scanout。修复后串口日志确认：`[virtio] dev #1: GPU already claimed by raw probe, skipping reset`，screendump 从 640×480（未绑定的默认面）变为 1280×800（正确 scanout）。
 
-**残留**：QEMU TCG 的 virtio-gpu `TRANSFER_TO_HOST_2D` → scanout surface 合成路径即使在所有命令返回 `RESP_OK`、DMA backing 含已验证像素（readback `VA[0]=0xff00ff00`，PA 经 AT S1E1R 翻译后一致）的情况下，仍不产出可见像素。这是 QEMU TCG 的 2D blit 实现问题，需 KVM 加速（ARM64 硬件）绕过——**与之前的 used-ring 判断无关**。
+**残留（2026-07-11 二次修正根因）**：先前判定「QEMU TCG 2D blit 问题」**仍属误判**。真正的根因是 **kei 的 EL2 stage-2 地址翻译表与 stage-1 线性映射不一致**：
+
+- kei 运行于 EL1，但 `virtualization=on` 下 QEMU virt 的 EL2 仍活跃，stage-2（VTTBR_EL2）翻译表处于生效状态。
+- `AT S1E1R` 只走 stage-1，返回 **IPA**（中间物理地址），不是设备 DMA 看到的真 PA。
+- 通过 QEMU monitor `xp /xg <addr>` 直接读客户机物理内存证实：FRAMEBUFFER 的 IPA（如 `0x40eb8000`）在 QEMU RAM 中**全零**，而同段的 VQ_MEM IPA（`0x412a1000`）**有数据**——说明 stage-2 表把 FRAMEBUFFER 这 4MB 区域的 IPA 重映射到了别的真 PA，内核写入落在了 stage-2 未覆盖/错位的页上，DMA 因此读到零。
+- `AT S12E1R`（stage-1+stage-2 联合翻译，能给出真 PA）在 kei 的 HCR_EL2 配置下会 trap（ESR EC=0），无法从 EL1 执行，故无法直接读取真 PA。
+- VQ_MEM（16KB）写入能到达 QEMU RAM，FRAMEBUFFER（4MB）不能——差异在 stage-2 表覆盖范围。
+
+**这是 kei 内核侧的 stage-2 页表 bug，不是 QEMU 的限制。** 修复方向：(1) 让 EL2 stub 在 drop 到 EL1 前禁用 stage-2（`HCR_EL2.VM=0`，使 IPA==PA），或 (2) 修复 stage-2 表覆盖全部内核 .bss（含 4MB FRAMEBUFFER），或 (3) 用内核页分配器（`DmaCoherent`，`GpuDevice::init` 路径已用）替代裸 `.bss` 静态数组——分配器走的页会被 stage-2 正确映射。此修复涉及 ostd/EL2 boot 代码，超出本会话范围。
 
 ### kei 内核完整启动 + 用户空间进程（2026-07-04）🎉
 

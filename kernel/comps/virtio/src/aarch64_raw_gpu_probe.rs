@@ -498,22 +498,24 @@ fn init_gpu(mmio_base: usize) {
     GPU_READY.store(1, Ordering::Relaxed);
     draw_test_pattern();
 
-    // Diagnostic: read back a few pixels to confirm the writes landed in the
-    // FRAMEBUFFER, and read the same offsets through the AT-translated PA via
-    // the linear mapping. If the two disagree, the DMA backing PA points at a
-    // different page than the one we drew to (the root cause of a black
-    // scanout even though every virtio-gpu command returned RESP_OK).
+    // Diagnostic: confirm the test pattern is readable via the FRAMEBUFFER VA,
+    // and log the EL plus the S1E1R (stage-1 → IPA) translation of the
+    // framebuffer base. NOTE: under kei's EL2 config a stage-2 table is active,
+    // so S1E1R yields an *IPA*, not the true PA that QEMU's virtio-gpu DMA
+    // reads. This is the known root cause of the black scanout: the framebuffer
+    // backing store is attached at the IPA, but the device reads the true PA
+    // (stage-2 output), where the kernel's writes have not landed. S12E1R (the
+    // combined walk that would give the true PA) is trapped by HCR_EL2, so it
+    // cannot be used from EL1 here. See PLAN.md for the full analysis.
     unsafe {
         let fb_va = core::ptr::addr_of!(FRAMEBUFFER) as *const u32;
         let v0 = read_volatile(fb_va);
-        let v_border = read_volatile(fb_va.add(8)); // first border pixel (x=8,y=0)
-        let fb_pa = translate_va_to_pa(core::ptr::addr_of!(FRAMEBUFFER) as usize);
-        let pa_va = LINEAR_BASE + fb_pa;
-        let pa0 = read_volatile((pa_va) as *const u32);
-        let pa_border = read_volatile((pa_va + 8 * 4) as *const u32);
+        let fb_ipa = translate_va_to_pa(core::ptr::addr_of!(FRAMEBUFFER) as usize);
+        let el: usize;
+        core::arch::asm!("mrs {0}, CurrentEL", out(reg) el, options(nostack, preserves_flags));
         ostd::early_println!(
-            "[virtio-gpu] readback VA[0]={:#x} VA[8]={:#x} | PA[0]={:#x} PA[8]={:#x} (pa={:#x})",
-            v0, v_border, pa0, pa_border, fb_pa
+            "[virtio-gpu] readback VA[0]={:#x} IPA={:#x} (EL{})",
+            v0, fb_ipa, (el >> 2) & 3
         );
     }
 
@@ -647,15 +649,21 @@ fn flush_dcache_range(va_start: usize, len: usize) {
 }
 
 /// Translates a kernel virtual address to a physical address using the
-/// ARM64 AT S1E1R instruction. This reads the actual page table mapping
-/// at EL1, ensuring we get the correct PA even after the kernel page
+/// ARM64 AT S1E1R instruction. This reads the stage-1 (EL1) page table
+/// mapping, ensuring we get the correct IPA even after the kernel page
 /// table switch (where the boot PT linear mapping may differ from the
 /// kernel PT's mapping).
+///
+/// NOTE: S1E1R yields the *IPA* (intermediate physical address) when a
+/// stage-2 (EL2) translation is active. A combined S12E1R walk that would
+/// yield the true PA is trapped under kei's EL2 configuration (HCR_EL2
+/// traps AT instructions), so it cannot be used here. Callers must be aware
+/// that under stage-2 this IPA may differ from the PA that an external DMA
+/// master (QEMU's virtio-gpu) sees.
 ///
 /// Falls back to `va - LINEAR_BASE` if AT translation fails (bit 0 of
 /// PAR_EL1 = 1 indicates abort).
 fn translate_va_to_pa(va: usize) -> usize {
-    // Use AT S1E1R to translate VA at EL1 read
     let par: usize;
     unsafe {
         core::arch::asm!(
@@ -669,13 +677,10 @@ fn translate_va_to_pa(va: usize) -> usize {
             options(nostack, preserves_flags),
         );
     }
-    // PAR_EL1 bit 0 = 0 means success; PA is in bits [47:12]
     if par & 1 == 0 {
         let pa = par & 0x0000_FFFF_F000;
-        // Add the page offset from the VA
         pa | (va & 0xFFF)
     } else {
-        // Abort — fall back to linear mapping arithmetic
         va.wrapping_sub(LINEAR_BASE)
     }
 }
