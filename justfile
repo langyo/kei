@@ -59,8 +59,8 @@ versions:
 
 # Generate an ed25519 SSH keypair for VM access (one-time setup).
 # The private key is saved to test/initramfs/build/client_ssh_key.
+[script('bash')]
 setup-keys:
-    #!/usr/bin/env bash
     set -e
     KEYDIR="test/initramfs/build"
     mkdir -p "$KEYDIR"
@@ -106,8 +106,8 @@ build-board BOARD:
 
 # Build the kernel for a specific architecture.
 # Usage: just build-arch aarch64  (or x86_64, riscv64, loongarch64)
+[script('bash')]
 build-arch ARCH:
-    #!/usr/bin/env bash
     set -e
     ARCH="{{ARCH}}"
     case "$ARCH" in
@@ -131,8 +131,8 @@ build-arch ARCH:
     esac
 
 # Build aarch64 kernel + ARM64 Image + initramfs (internal).
+[script('bash')]
 _build-aarch64:
-    #!/usr/bin/env bash
     set -e
     echo "[build] Building aarch64 kernel..."
     wsl -d Ubuntu-24.04 -- bash -lc 'source ~/.cargo/env 2>/dev/null; cd "/mnt/d/源代码/工程项目/celestia/kei" && cargo osdk build --scheme aarch64 --target-arch aarch64' 2>&1 | tail -5
@@ -180,8 +180,8 @@ initramfs-force:
 #   just run headless     # aarch64 without GUI (SSH only)
 
 # Launch QEMU. Defaults to host architecture; pass ARCH to override.
+[script('bash')]
 run ARCH="":
-    #!/usr/bin/env bash
     set -e
     ARG="{{ARCH}}"
     if [ -z "$ARG" ]; then
@@ -235,8 +235,8 @@ run ARCH="":
     esac
 
 # Internal: launch aarch64 QEMU.
+[script('bash')]
 _run-aarch64 HEADLESS:
-    #!/usr/bin/env bash
     set -e
     HEADLESS="{{HEADLESS}}"
 
@@ -299,8 +299,8 @@ _run-aarch64 HEADLESS:
         -append "init=/init SHELL=/bin/sh LOGNAME=root HOME=/ USER=root PATH=/bin:/sbin"
 
 # Internal: launch x86_64 QEMU via cargo osdk run.
+[script('bash')]
 _run-x86_64:
-    #!/usr/bin/env bash
     set -e
     echo "[run] x86_64 uses 'cargo osdk run' with serial console"
     echo "[run] No SSH server on x86_64 (uses serial shell)"
@@ -308,8 +308,8 @@ _run-x86_64:
     cargo osdk run --target x86_64-unknown-none
 
 # Internal: launch RISC-V QEMU via cargo osdk run.
+[script('bash')]
 _run-riscv64:
-    #!/usr/bin/env bash
     set -e
     echo "[run] RISC-V uses 'cargo osdk run' with serial console"
     echo "[run] No SSH server on RISC-V (uses serial shell)"
@@ -317,8 +317,8 @@ _run-riscv64:
     cargo osdk run --scheme riscv --target-arch riscv64
 
 # Internal: launch LoongArch QEMU via cargo osdk run.
+[script('bash')]
 _run-loongarch64:
-    #!/usr/bin/env bash
     set -e
     echo "[run] LoongArch uses 'cargo osdk run' with serial console"
     echo "[run] No SSH server on LoongArch (uses serial shell)"
@@ -333,8 +333,8 @@ _run-loongarch64:
 
 # Capture a screenshot of the running QEMU display.
 # Usage: just screenshot [filename]
+[script('bash')]
 screenshot FILE="target/screenshot.ppm":
-    #!/usr/bin/env bash
     set -e
     OUT="{{FILE}}"
     # Ensure .ppm extension for QEMU compatibility
@@ -383,20 +383,7 @@ screenshot FILE="target/screenshot.ppm":
         elif command -v python3 &>/dev/null || command -v python &>/dev/null; then
             PNG="${OUT%.ppm}.png"
             PYTHON=$(command -v python3 || command -v python)
-            "$PYTHON" -c "
-import sys
-with open(sys.argv[1], 'rb') as f:
-    # PPM P6 header: P6\n<width> <height>\n255\n
-    magic = f.readline()
-    if magic.strip() != b'P6':
-        sys.exit(1)
-    dims = f.readline().split()
-    w, h = int(dims[0]), int(dims[1])
-    f.readline()  # maxval
-    data = f.read()
-    # Write as simple binary (caller can analyze raw)
-    print(f'{w}x{h}, {len(data)} bytes pixel data')
-" "$OUT" 2>/dev/null && echo "[screenshot] PPM validated"
+            "$PYTHON" scripts/ppm_info.py "$OUT" 2>/dev/null && echo "[screenshot] PPM validated"
         fi
     else
         echo "[screenshot] ERROR: Screenshot file not created."
@@ -412,8 +399,8 @@ ssh:
         -p 2222 root@127.0.0.1
 
 # Stop the running QEMU instance.
+[script('bash')]
 kill:
-    #!/usr/bin/env bash
     taskkill //F //IM qemu-system-aarch64.exe 2>/dev/null || true
     taskkill //F //IM qemu-system-x86_64.exe 2>/dev/null || true
     taskkill //F //IM qemu-system-riscv64.exe 2>/dev/null || true
