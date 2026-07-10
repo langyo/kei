@@ -1,0 +1,8 @@
+[package]
+name = "bsp-bcm2711"
+version.workspace = true
+edition.workspace = true
+description = "Broadcom BCM2711 Board Support Package (Raspberry Pi 4)"
+license.workspace = true
+
+[dependencies]

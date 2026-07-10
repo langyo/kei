@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "rk3566",
+    "bcm2711",
+    "jh7110",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "SySL-1.0"
+
+[profile.release]
+opt-level = "s"
+lto = "thin"

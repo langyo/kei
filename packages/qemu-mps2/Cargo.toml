@@ -1,0 +1,25 @@
+[package]
+edition = "2021"
+name = "kei-qemu-mps2"
+version = "0.1.0"
+publish = false
+
+[dependencies]
+# kei wire protocol library (workspace root, two levels up)
+kei = { path = "../..", default-features = false, features = ["wire", "manifest", "hal"] }
+
+# Heap allocator for `alloc` (kei's wire protocol uses Vec<u8> for frames).
+linked_list_allocator = "0.10"
+
+# Cortex-M runtime — only for the firmware binary (no_std target).
+[target.'cfg(target_os = "none")'.dependencies]
+cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+critical-section = "1"
+
+[profile.release]
+debug = 2
+opt-level = 3
+lto = false
+panic = "abort"

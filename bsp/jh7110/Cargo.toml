@@ -1,0 +1,8 @@
+[package]
+name = "bsp-jh7110"
+version.workspace = true
+edition.workspace = true
+description = "StarFive JH7110 Board Support Package (VisionFive 2)"
+license.workspace = true
+
+[dependencies]

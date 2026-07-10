@@ -1,0 +1,133 @@
+# The OSDK manifest at the Asterinas root virtual workspace
+# provides default OSDK settings for all packages.
+
+# The common options for build, run and test
+[boot]
+method = "grub-rescue-iso"
+
+[grub]
+boot_protocol = "multiboot2"
+
+[qemu]
+args = "$(./tools/qemu_args.sh normal)"
+
+# Special options for running
+[run.boot]
+kcmd_args = [
+    "SHELL=/bin/sh",
+    "LOGNAME=root",
+    "HOME=/",
+    "USER=root",
+    "PATH=/bin:/benchmark",
+    "init=/init",
+]
+init_args = ["sh", "-l"]
+initramfs = "test/initramfs/build/initramfs.cpio.gz"
+
+# Special options for testing
+[test.qemu]
+args = "$(./tools/qemu_args.sh test)"
+
+# Other Schemes
+
+[scheme."microvm"]
+boot.method = "qemu-direct"
+build.strip_elf = true
+qemu.args = "$(./tools/qemu_args.sh microvm)"
+
+[scheme."iommu"]
+supported_archs = ["x86_64"]
+qemu.args = "$(./tools/qemu_args.sh iommu)"
+
+[scheme."tdx"]
+supported_archs = ["x86_64"]
+build.features = ["cvm_guest"]
+boot.method = "grub-qcow2"
+grub.boot_protocol = "linux"
+qemu.args = "$(./tools/qemu_args.sh tdx)"
+
+[scheme."riscv"]
+supported_archs = ["riscv64"]
+boot.method = "qemu-direct"
+build.strip_elf = false
+qemu.args = "$(./tools/qemu_args.sh riscv)"
+
+[scheme."sifive_u"]
+supported_archs = ["riscv64"]
+build.features = ["riscv_sv39_mode"]
+boot.method = "qemu-direct"
+build.strip_elf = false
+qemu.with_monitor = true
+
+qemu.args = """\
+    -machine sifive_u \
+    -m 8G \
+    -smp 5 \
+    -no-reboot \
+    -nographic \
+    -display none \
+    -serial chardev:mux \
+    -monitor chardev:mux \
+    -chardev stdio,id=mux,mux=on,signal=off,logfile=target/qemu.log
+"""
+
+[scheme."loongarch"]
+boot.method = "qemu-direct"
+build.strip_elf = false
+
+qemu.args = """\
+    -machine virt \
+    -m 8G \
+    -smp 1 \
+    --no-reboot \
+    -nographic \
+    -display none \
+    -serial chardev:mux \
+    -monitor chardev:mux \
+    -chardev stdio,id=mux,mux=on,signal=off,logfile=target/qemu.log \
+    -device virtio-keyboard-pci \
+    -device virtio-serial \
+    -device virtconsole,chardev=mux \
+    -rtc base=utc
+"""
+
+[scheme."aarch64"]
+supported_archs = ["aarch64"]
+boot.method = "qemu-direct"
+build.strip_elf = false
+
+# QEMU args for aarch64. Drives both a serial console (for kernel logs) and
+# a graphical window (for the virtio-gpu 2D scanout). Override the display
+# backend with $QEMU_DISPLAY (e.g. `-display none` for headless CI,
+# `-display sdl` for a local window, `-display vnc=0.0.0.0:0` for remote).
+# Default keeps a window when $QEMU_DISPLAY is unset; set QEMU_DISPLAY=-display none
+# in CI to stay headless.
+qemu.args = """\
+    -cpu cortex-a72 \
+    -machine virt,gic-version=3,virtualization=on \
+    -m ${MEM:-2G} \
+    -smp ${SMP:-1} \
+    --no-reboot \
+    -serial chardev:mux \
+    -monitor chardev:mux \
+    -chardev stdio,id=mux,mux=on,signal=off,logfile=target/qemu.log \
+    -device virtio-gpu-device \
+    -device virtio-keyboard-device \
+    -device virtio-serial-device \
+    -device virtconsole,chardev=mux \
+    -netdev user,id=net0,hostfwd=tcp::2222-:22 \
+    -device virtio-net-device,netdev=net0 \
+    ${QEMU_DISPLAY:--display sdl} \
+"""
+
+# aarch64 uses its own initramfs (with dropbear SSH server) and init args.
+[scheme."aarch64".run.boot]
+initramfs = "test/initramfs/build/initramfs_aarch64.cpio.gz"
+kcmd_args = [
+    "SHELL=/bin/sh",
+    "LOGNAME=root",
+    "HOME=/root",
+    "USER=root",
+    "PATH=/bin:/sbin",
+]
+init_args = ["/init"]

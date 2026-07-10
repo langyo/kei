@@ -1,0 +1,70 @@
+[package]
+name = "kei"
+version = "0.1.0"
+edition = "2021"
+authors = ["langyo <langyo.china@gmail.com>"]
+license = "SySL-1.0"
+description = """\
+kei — no_std embedded bridge library: manifest schema, wire protocol, \
+and protocol type identifiers shared between embassy-based sensor nodes \
+and the evernight gateway broker.\
+"""
+repository = "https://github.com/celestia-island/kei"
+keywords = ["no-std", "embedded", "embassy", "iot", "industrial"]
+categories = ["embedded", "no-std", "network-programming"]
+
+[workspace]
+members = ["../qemu-mps2"]
+
+[features]
+# Default: everything that works on no_std + alloc
+default = ["wire", "manifest", "codec", "hal"]
+
+# The celestia wire protocol (embassy ↔ gateway framing).
+# Uses postcard for payload serialization + inline CRC16.
+# Depends on `hal` because Node/Gateway use the Transport/SensorDevice traits.
+wire = ["dep:postcard", "hal"]
+
+# Hardware manifest schema (serde types — register maps, alarms, stations).
+manifest = ["dep:serde"]
+
+# Protocol type identifiers (ProtocolKind enum, ProtocolFrame container).
+# Thin wrappers only — evernight owns all encode/decode logic.
+codec = ["dep:serde"]
+
+# HAL traits (Transport, SensorDevice — embassy-implementable).
+hal = []
+
+# std-only helpers (TOML/JSON manifest adapters, etc.) — off by default.
+std = ["serde?/std", "postcard?/use-std"]
+
+[dependencies]
+# serde with alloc (no_std). The "derive" feature gives Serialize/Deserialize.
+serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
+
+# postcard: compact binary serde format for wire payloads.
+# Works on no_std (designed for embedded). "alloc" enables to_allocvec.
+postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }
+
+[dev-dependencies]
+# For host-side tests only (cargo test). Does NOT affect no_std consumers.
+serde_json = "1"
+# Benchmark framework (cargo bench). Host-only.
+criterion = { version = "0.5", default-features = false, features = ["plotters", "cargo_bench_support"] }
+# Math functions for benchmark data generation (NTC simulation).
+libm = "0.2"
+
+[[bench]]
+name = "wire_bench"
+harness = false
+
+# Release profile for the workspace — no LTO (LTO eliminates benchmark
+# loops in the QEMU firmware even with core::hint::black_box due to the
+# cortex-m-rt entry macro interaction). opt-level 3 for max performance.
+[profile.release]
+opt-level = 3
+lto = false
+panic = "abort"
+
+[profile.dev]
+panic = "abort"

@@ -1,0 +1,2 @@
+MknodTest.FifoDoesNotRequireCapMknod
+MknodTest.RegularFilePermissions

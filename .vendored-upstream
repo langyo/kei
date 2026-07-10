@@ -1,0 +1,5 @@
+upstream_url=https://github.com/asterinas/asterinas.git
+upstream_ref=main
+upstream_sha=e7061e678e569642cc0bda9f49458ab7fb3cea51
+upstream_date=2026-07-02 10:32:01 -0700
+vendored_date=2026-07-02T19:44:56.315189+00:00

@@ -1,0 +1,11 @@
+[target.thumbv7em-none-eabi]
+# QEMU MPS2 AN386 (Cortex-M4). UART0 maps to stdio.
+# -serial stdio: guest UART0 → host stdin/stdout (good for interactive demo)
+# For a host Gateway to read frames, use -serial pty instead.
+runner = "qemu-system-arm -M mps2-an386 -cpu cortex-m4 -m 4M -nographic -semihosting -serial stdio -kernel"
+
+[build]
+target = "thumbv7em-none-eabi"
+
+[env]
+DEFMT_LOG = "trace"

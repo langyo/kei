@@ -1,0 +1,59 @@
+name: CI
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── Host tests (std target) ──────────────────────────────────────────────-
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --all-features --tests
+
+  # ── no_std check on ARM Cortex-M (the primary embassy target) ────────────-
+  no_std-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabi
+      # Check that kei compiles with only the no_std-compatible features.
+      - run: cargo check --target thumbv7em-none-eabi --no-default-features --features "wire,manifest,codec,hal"
+
+  # ── no_std check on RISC-V (secondary target) ────────────────────────────-
+  no_std-riscv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: riscv32imc-unknown-none-elf
+      - run: cargo check --target riscv32imc-unknown-none-elf --no-default-features --features "wire,manifest"
+
+  # ── Formatting ────────────────────────────────────────────────────────────-
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  # ── Clippy (on host, all features) ────────────────────────────────────────-
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo clippy --all-features -- -D warnings

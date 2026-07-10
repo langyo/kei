@@ -1,0 +1,29 @@
+# NanoPi R3S — kei build configuration
+
+[board]
+name = "nanopi-r3s"
+soc = "rk3566"
+arch = "aarch64"
+
+[kernel]
+# Upstream asterinas version
+asterinas_version = "0.18.0"
+
+# BSP crate to link
+bsp_crate = "bsp-rk3566"
+
+# Device tree source file (relative to board/nanopi-r3s/)
+dtb = "rk3566-nanopi-r3s"
+
+# Kernel features to enable
+features = ["aarch64", "rk3566"]
+
+[qemu]
+machine = "virt"
+cpu = "cortex-a55"
+memory = "2048"
+smp = 4
+
+[output]
+kernel_image = "kei-kernel.bin"
+dtb_image = "rk3566-nanopi-r3s.dtb"

@@ -1,0 +1,41 @@
+name: CI
+on:
+  push:
+    branches: [master, dev, main]
+  pull_request:
+    branches: [master, dev, main]
+
+jobs:
+  commit-msg-lint:
+    uses: celestia-island/celestia-devtools/.github/workflows/commit-msg-lint.yml@master
+  check-bsp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cd bsp && cargo check
+
+  check-vendored-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Show vendored upstream versions
+        run: |
+          echo "=== Upstream asterinas ==="
+          cat .vendored-upstream 2>/dev/null || echo "  (not vendored yet)"
+          echo ""
+          echo "=== ARM64 source ==="
+          cat .vendored-arm64 2>/dev/null || echo "  (not pulled yet)"
+
+  fmt:
+    runs-on: ubuntu-latest
+    env:
+      # Override rust-toolchain.toml so fmt uses stable (nightly's rustfmt
+      # is not always available for pinned toolchains).
+      RUSTUP_TOOLCHAIN: stable
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check

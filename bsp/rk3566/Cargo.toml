@@ -1,0 +1,12 @@
+[package]
+name = "bsp-rk3566"
+version.workspace = true
+edition.workspace = true
+description = "Rockchip RK3566 Board Support Package for Asterinas/kei"
+license.workspace = true
+
+[dependencies]
+# Will depend on ostd when built inside the kernel workspace
+# ostd = { path = "../../vendor/asterinas/ostd" }
+
+# Placeholder until integration with patched ostd

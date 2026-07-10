@@ -1,0 +1,22 @@
+# Default board configuration template
+
+[board]
+name = ""
+soc = ""
+arch = "aarch64"
+
+[kernel]
+asterinas_version = "0.18.0"
+bsp_crate = ""
+dtb = ""
+features = []
+
+[qemu]
+machine = "virt"
+cpu = "cortex-a55"
+memory = "2048"
+smp = 4
+
+[output]
+kernel_image = "kei-kernel.bin"
+dtb_image = ""

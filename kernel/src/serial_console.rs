@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: MPL-2.0
+
+//! Minimal serial console device for user-space I/O on aarch64.
+
+use alloc::sync::Arc;
+use core::fmt::Display;
+
+use ostd::arch::serial::{pl011_recv_byte, pl011_send_byte};
+use ostd::mm::{FallibleVmRead, FallibleVmWrite};
+
+use crate::{
+    events::IoEvents,
+    fs::{
+        file::{AccessMode, FileLike, file_table::FdFlags},
+        pseudofs::AnonInodeFs,
+        vfs::path::Path,
+    },
+    prelude::*,
+    process::signal::{PollHandle, Pollable},
+};
+
+#[derive(Debug)]
+pub struct SerialConsole {
+    access_mode: AccessMode,
+    pseudo_path: Path,
+}
+
+impl SerialConsole {
+    pub fn new(access_mode: AccessMode) -> Self {
+        let pseudo_path = AnonInodeFs::new_path(|_| "anon_inode:[serial]".to_string());
+        Self {
+            access_mode,
+            pseudo_path,
+        }
+    }
+}
+
+impl Pollable for SerialConsole {
+    fn poll(&self, mask: IoEvents, _poller: Option<&mut PollHandle>) -> IoEvents {
+        let mut events = IoEvents::empty();
+        if mask.contains(IoEvents::OUT) {
+            events |= IoEvents::OUT;
+        }
+        if mask.contains(IoEvents::IN) {
+            events |= IoEvents::IN;
+        }
+        events
+    }
+}
+
+impl FileLike for SerialConsole {
+    fn read(&self, writer: &mut VmWriter) -> Result<usize> {
+        if !self.access_mode.is_readable() {
+            return_errno_with_message!(Errno::EBADF, "serial console not readable");
+        }
+        let mut buf = [0u8; 256];
+        let mut total = 0;
+        while total < buf.len() {
+            match pl011_recv_byte() {
+                Some(byte) => {
+                    buf[total] = byte;
+                    total += 1;
+                }
+                None => break,
+            }
+        }
+        if total == 0 {
+            return_errno_with_message!(Errno::EAGAIN, "no data available");
+        }
+        // Copy kernel buffer to user-space writer
+        let mut kreader = ostd::mm::VmReader::from(&buf[..total]);
+        writer.write_fallible(&mut kreader).map_err(|e| e.0)?;
+        Ok(total)
+    }
+
+    fn write(&self, reader: &mut VmReader) -> Result<usize> {
+        if !self.access_mode.is_writable() {
+            return_errno_with_message!(Errno::EBADF, "serial console not writable");
+        }
+        let mut buf = [0u8; 1024];
+        let mut kwriter = ostd::mm::VmWriter::from(&mut buf[..]);
+        let n = reader.read_fallible(&mut kwriter).map_err(|e| e.0)?;
+        for i in 0..n {
+            pl011_send_byte(buf[i]);
+        }
+        Ok(n)
+    }
+
+    fn access_mode(&self) -> AccessMode {
+        self.access_mode
+    }
+
+    fn path(&self) -> &Path {
+        &self.pseudo_path
+    }
+
+    fn dump_proc_fdinfo(self: Arc<Self>, _fd_flags: FdFlags) -> Box<dyn Display> {
+        struct FdInfo;
+        impl Display for FdInfo {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "serial console")
+            }
+        }
+        Box::new(FdInfo)
+    }
+}

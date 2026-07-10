@@ -1,0 +1,57 @@
+name: Multi-Architecture QEMU Boot Test
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+  workflow_dispatch:
+
+jobs:
+  test-aarch64:
+    runs-on: ubuntu-24.04-arm64
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src, rustc-dev, llvm-tools-preview
+          targets: aarch64-unknown-none
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-arm
+      - name: Boot test aarch64
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/test-all-arch.sh aarch64
+
+  test-x86_64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src, rustc-dev, llvm-tools-preview
+          targets: x86_64-unknown-none
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-x86
+      - name: Boot test x86_64
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/test-all-arch.sh x86_64
+
+  test-riscv64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src, rustc-dev, llvm-tools-preview
+          targets: riscv64imac-unknown-none-elf
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-misc
+      - name: Boot test riscv64
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/test-all-arch.sh riscv64

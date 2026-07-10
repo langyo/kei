@@ -1,0 +1,31 @@
+/dts-v1/;
+
+/ {
+	model = "FriendlyELEC NanoPi R3S (kei)";
+	compatible = "friendlyelec,nanopi-r3s", "rockchip,rk3566";
+
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	chosen {
+		bootargs = "console=ttyS2,1500000n8 earlycon";
+		stdout-path = "serial2:1500000n8";
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x00000000 0x0 0x80000000>;
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a55";
+			reg = <0x0>;
+			enable-method = "psci";
+		};
+	};
+};

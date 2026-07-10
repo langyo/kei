@@ -1,0 +1,75 @@
+name: Kei Library CI
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - "packages/kei/**"
+      - ".github/workflows/kei-lib-ci.yml"
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - "packages/kei/**"
+      - ".github/workflows/kei-lib-ci.yml"
+  workflow_dispatch: # Allow manual trigger for testing
+
+env:
+  CARGO_TERM_COLOR: always
+  # Override the repo-root rust-toolchain.toml (which pins nightly for
+  # the kernel). The library targets stable + no_std.
+  RUSTUP_TOOLCHAIN: stable
+
+defaults:
+  run:
+    working-directory: packages/kei
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --all-features --tests
+
+  no_std-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabi
+      - run: cargo check --target thumbv7em-none-eabi --no-default-features --features "wire,manifest,codec,hal"
+
+  no_std-riscv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: riscv32imc-unknown-none-elf
+      - run: cargo check --target riscv32imc-unknown-none-elf --no-default-features --features "wire,manifest"
+
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo clippy --all-features -- -D warnings
+
+  bench-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      # Verify benchmarks compile (don't run — too slow for CI)
+      - run: cargo bench --no-run

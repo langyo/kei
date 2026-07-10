@@ -1,0 +1,12 @@
+{
+    // rust-analyzer configuration for kei kernel development.
+    //
+    // kei is a no_std kernel: ostd/src/arch/x86/ requires dependencies
+    // (acpi, uefi, x86_64) that only exist for `x86_64-unknown-none`.
+    // Setting the target makes rust-analyzer resolve dependencies correctly.
+    //
+    // To check a different architecture, change the target:
+    //   "rust-analyzer.cargo.target": "aarch64-unknown-none"
+    "rust-analyzer.cargo.target": "x86_64-unknown-none",
+    "rust-analyzer.check.command": "check"
+}

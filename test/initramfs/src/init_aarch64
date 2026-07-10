@@ -1,0 +1,31 @@
+#!/bin/sh
+
+mount -t proc none /proc 2>/dev/null
+mount -t sysfs none /sys 2>/dev/null
+
+echo ""
+echo "=== kei ignition (aarch64) ==="
+
+mkdir -p /var/run
+
+echo "Starting dropbear on port 22..."
+/sbin/dropbear -F -E -R -p 22 &
+
+echo ""
+echo "Boot complete. SSH on port 22 (host port 2222)."
+while true; do sleep 10; done
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

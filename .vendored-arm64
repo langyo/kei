@@ -1,0 +1,6 @@
+arm64_url=https://github.com/wanywhn/asterinas.git
+arm64_ref=arm64-support
+arm64_sha=1437f77b69df2f39a3c5faf87ef3b447c03f1cec
+arm64_date=2026-05-25 09:13:57 +0800
+pulled_date=2026-07-02T19:45:11.256320+00:00
+note=Point-in-time snapshot. Maintained independently in kei thereafter.

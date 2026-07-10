@@ -1,0 +1,43 @@
+/vendor/
+/build/
+/output/
+/target/
+*.swp
+*.swo
+*~
+.DS_Store
+.env
+
+# QEMU and runtime logs
+*.log
+qemu.log
+
+# QEMU device tree blobs dumped at runtime for debugging
+qemu_virt.dtb
+
+# Screenshots captured while running the kernel in QEMU
+screenshot*.png
+qemu_window*.png
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Build artifacts
+*.img
+*.img.xz
+*.iso
+*.qcow2
+*.cpio.gz
+
+# Disk images for testing
+/test/initramfs/build/*.img
+
+# Pre-built per-arch busybox binaries (downloaded by initramfs.py)
+/test/initramfs/busybox-*
+
+# Cargo lock for osdk (it has its own)
+/osdk/Cargo.lock
+/Cargo.lock
+
+dist/

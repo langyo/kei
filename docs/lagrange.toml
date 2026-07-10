@@ -1,0 +1,8 @@
+[site]
+title = "KEI"
+description = "IoT-oriented OS kernel — RTOS discipline on Asterinas, with Linux ecosystem access"
+
+cname = "kei.docs.celestia.world"
+[languages]
+default = "en"
+order = ["en", "zhs", "zht", "ja", "ko", "fr", "es", "ru", "ar"]

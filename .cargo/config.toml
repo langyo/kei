@@ -1,0 +1,27 @@
+# kei — cargo configuration
+#
+# Forces cargo-osdk's generated base crate (at
+# target/osdk/aster-kernel-run-base/, a SEPARATE workspace root) to use
+# kei's LOCAL ostd fork instead of crates.io's ostd 0.18.0.
+#
+# The problem: cargo-osdk creates an isolated base crate whose Cargo.toml
+# declares `ostd = { version = "0.18.0" }`. The kei workspace root has
+# `[patch.crates-io]` in Cargo.toml, but that patch only applies within
+# the workspace's manifest tree — NOT to the separate base crate.
+#
+# The fix: `[patch.crates-io]` in config.toml is unofficially supported
+# (rust-lang/cargo#5539) but works in practice. Crucially, cargo walks UP
+# the directory tree from the build cwd collecting .cargo/config.toml
+# files — and the base crate is a descendant of kei root, so this file IS
+# discovered when building it. This sidesteps the manifest-tree limitation.
+#
+# Without this, aarch64 builds fail because crates.io's ostd 0.18.0 lacks
+# the aarch64 target dependencies (fdt, unwinding) that kei's fork adds.
+
+[patch.crates-io]
+ostd = { path = "ostd" }
+ostd-pod = { path = "ostd/libs/ostd-pod" }
+ostd-macros = { path = "ostd/libs/ostd-macros" }
+ostd-test = { path = "ostd/libs/ostd-test" }
+osdk-frame-allocator = { path = "osdk/deps/frame-allocator" }
+osdk-heap-allocator = { path = "osdk/deps/heap-allocator" }
