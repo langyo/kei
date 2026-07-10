@@ -2,7 +2,7 @@
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>IoT-ориентированное ядро ОС — RTOS-дисциплина на Asterinas с доступом к экосистеме Linux</strong></p>
+<p align="center"><strong>Ядро ОС на Rust для промышленного IoT — на базе Asterinas (星绽), с no_std библиотекой для сенсорных узлов.</strong></p>
 
 <div align="center">
 
@@ -21,70 +21,37 @@
 [한국어](../ko/README.md) ·
 [Français](../fr/README.md) ·
 [Español](../es/README.md) ·
-**[Русский](../ru/README.md)** ·
+**Русский** ·
 [العربية](../ar/README.md)
 
 </div>
 
 ## Введение
 
-KEI — это ядро операционной системы, специально созданное для промышленного IoT.
-Оно берёт [Asterinas](https://github.com/asterinas/asterinas) и превращает её в
-средство в стиле RTOS — компактное, работающее в реальном времени, аудируемое —
-но сохраняет мост в экосистему Linux, чтобы существующие драйверы, инструменты и
-бинарники оставались в пределах досягаемости. Это ни дистрибутив Linux, ни штатная
-Asterinas. Ближайший аналог — RTOS, которая случаем говорит на Linux: детерминизм
-реального времени для нагрузки, которой он нужен, и программная совместимость
-уровня Linux для всего остального.
+KEI — ядро ОС на Rust для edge-устройств ARM64 и RISC-V. Запускает брокер [evernight](https://github.com/celestia-island/evernight) и предоставляет syscall ABI для [aris](https://github.com/celestia-island/aris) (браузерного движка). Включает библиотеку `#![no_std]` для сенсорных узлов embassy.
 
-## Модель форка
+KEI основан на [Asterinas (星绽)](https://github.com/asterinas/asterinas), фрейм-ядре на Rust.
 
-KEI **не** является веткой, отслеживающей апстрим. Это независимый форк, который
-периодически включает изменения апстрима по своему графику — та же модель, которую
-Apple использует для своего форка LLVM.
+## Содержимое
 
-```mermaid
-flowchart LR
-    UP["asterinas/asterinas\n(активный апстрим)"] -->|vendor-upstream.sh\nсквош каждые N месяцев| KEI["kei (этот репозиторий)\nполностью независим"]
-    WNY["wanywhn/asterinas\n(поддержка-arm64)"] -->|pull-arm64.sh\nодноразовый снимок| KEI
-```
-
-KEI самостоятельно поддерживает `ostd/src/arch/aarch64/`, `kernel/src/arch/aarch64/`,
-`bsp/`, `board/`, `configs/` и `docs/`.
+| Компонент | Расположение | Описание |
+|-----------|-------------|----------|
+| **Ядро KEI** | корень workspace | Ядро ОС Rust ARM64/RISC-V |
+| **Библиотека kei** | `packages/kei/` | `#![no_std]` библиотека для embassy |
 
 ## Быстрый старт
 
 ```bash
-just setup        # Configure git remotes
-just vendor       # Absorb latest upstream asterinas (squash)
-just pull-arm64   # Pull ARM64 code from wanywhn fork (one-time)
-just versions     # Show what upstream versions we're based on
-just build        # Build kernel for nanopi-r3s (aarch64)
-just test-all     # Boot-test all architectures in QEMU
+just build        # Сборка для платы по умолчанию
+just test-all     # Загрузочный тест QEMU
 ```
 
-## Что где находится
+## Экосистема
 
-| Каталог | Происхождение | Поддержка |
-|---------|---------------|-----------|
-| `ostd/` | Апстрим asterinas | Периодический вендоринг, баги исправляются на месте |
-| `ostd/src/arch/aarch64/` | Форк wanywhn (PR #3270) | **Независимо** — принадлежит нам |
-| `kernel/` | Апстрим asterinas | Периодический вендоринг |
-| `kernel/src/arch/aarch64/` | Форк wanywhn (PR #3270) | **Независимо** — принадлежит нам |
-| `osdk/` | Апстрим asterinas | Периодический вендоринг |
-| `bsp/` | kei | **100% наше** — Board Support Packages |
-| `board/` `configs/` | kei | **100% наше** — определения плат |
-| `scripts/` `docs/` | kei | **100% наше** — инструменты и документация |
-
-## Поддерживаемые архитектуры
-
-| Архитектура | Статус | Тест QEMU |
-|-------------|--------|-----------|
-| x86_64 | Апстрим, уровень 1 | ✅ q35 |
-| aarch64 | Поддерживается kei (из PR #3270) | ✅ virt/cortex-a55 |
-| riscv64 | Апстрим, уровень 2 | ⚠️ virt/rv64 |
-| loongarch64 | Апстрим, уровень 3 | ⚠️ virt/max |
+- **[aris](https://github.com/celestia-island/aris)** — браузерный движок
+- **[evernight](https://github.com/celestia-island/evernight)** — промышленный протокольный брокер
+- **[entelecheia](https://github.com/celestia-island/entelecheia)** — платформа AI-агентов
 
 ## Лицензия
 
-SySL-1.0（Synthetic Source License）для собственного кода KEI — см. [LICENSE](../../LICENSE). Вендорный код Asterinas（`ostd/`, `kernel/`, `osdk/`）остаётся под MPL-2.0 — см. [LICENSE-MPL](../../LICENSE-MPL).
+Код KEI: SySL-1.0. Импортированный код Asterinas: MPL-2.0.

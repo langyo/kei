@@ -6,10 +6,10 @@
 ## 1. 项目概述
 
 - **名称**：`kei`
-- **简介**：面向物联网的操作系统内核 —— 基于 Asterinas 的 RTOS 级设施，兼顾 Linux 生态接入。
+- **简介**：面向工业物联网的 Rust OS 内核 —— 源自 Asterinas（星绽）。ARM64/RISC-V，RTOS 级实时性，完整 Linux syscall ABI 兼容。
 - **远程仓库**：本地仓库（无 origin）
-- **技术栈**：Rust / just
-- **类别**：firmware
+- **技术栈**：Rust / just / OSDK
+- **类别**：os-kernel
 
 ## 2. 当前状态
 
@@ -282,110 +282,45 @@ kei 已有的核心 syscall 覆盖足够运行 Servo/Blitz + Boa + Wasmtime：mm
 
 ## Goal
 
-Maintain a production-ready Asterinas kernel fork for ARM64 embedded devices,
-with comprehensive Board Support Packages and multi-architecture QEMU testing.
+Maintain a production-ready Rust OS kernel for ARM64 embedded devices derived
+from Asterinas (星绽), with Board Support Packages and multi-architecture QEMU testing.
 
-## Design: Independent Fork (Apple LLVM Model)
+## Upstream Relationship
 
-### Why Not Track Upstream?
+KEI is derived from [Asterinas（星绽）](https://github.com/asterinas/asterinas).
+Upstream changes are absorbed periodically through directory-level vendoring
+(`just vendor`), not `git merge`. ARM64 arch code (`ostd/src/arch/aarch64/`,
+`kernel/src/arch/aarch64/`), BSP, board configs, and docs are independently
+maintained. See [upstream-sync guide](./docs/en/guides/upstream-sync.md).
 
-| Approach | Pro | Con | Verdict |
-|----------|-----|-----|---------|
-| Regular merge tracking | Catch upstream API breaks early | Constant merge conflicts; resource-heavy | ❌ Too expensive for startup |
-| Patch series (quilt) | Clean delta tracking | Fragile for 4475-line arch port; no IDE support | ❌ Wrong tool for scale |
-| **Independent fork + squash vendor** | Full control; absorb upstream on our schedule | Must manually detect API breaks at vendor time | ✅ Best fit |
-
-### How Vendoring Works
-
-`scripts/vendor-upstream.sh` does **directory-level replacement**, not git merge:
-
-```
-1. Snapshot our code (ostd/src/arch/aarch64/, bsp/, board/, configs/, ...)
-2. Delete ostd/, kernel/, osdk/ from kei tree
-3. Check out fresh copies from upstream/main
-4. Restore our snapshot on top
-5. Fix any API breaks (compile errors from changed upstream APIs)
-6. Commit as single "vendor: absorb asterinas <sha>"
-```
-
-This is exactly how Apple absorbs LLVM upstream: take the whole thing,
-overlay Apple-specific changes, commit as one squashed point.
-
-### What We Track vs. What We Own
-
-```
-kei tree:
-│
-├── ostd/                          ← VENDORED (replaced wholesale on upgrade)
-│   └── src/arch/
-│       ├── x86/                   ← comes with vendoring
-│       ├── riscv/                 ← comes with vendoring
-│       ├── loongarch/             ← comes with vendoring
-│       └── aarch64/               ← OURS (preserved across vendoring)
-│
-├── kernel/                        ← VENDORED
-│   └── src/arch/
-│       └── aarch64/               ← OURS (preserved across vendoring)
-│
-├── osdk/                          ← VENDORED
-├── bsp/                           ← OURS (never touched by vendoring)
-├── board/ configs/                ← OURS
-├── scripts/ docs/                 ← OURS
-└── .vendored-upstream             ← tracks which upstream commit we're on
-```
-
-### Vendoring Frequency
-
-- **Upstream asterinas**: Every 3-6 months, or when a critical fix lands
-- **ARM64 code (wanywhn)**: One-time pull, then independent maintenance.
-  Re-pull only if wanywhn makes significant improvements worth absorbing.
+Vendoring frequency: every 3–6 months, or on critical fixes.
 
 ## Milestones
 
-### M1 — Fork Bootstrap
-- [x] Independent fork structure
-- [x] Vendor script (squash/directory-replace model)
-- [x] ARM64 pull script (point-in-time snapshot from wanywhn)
-- [x] Multi-architecture QEMU test harness
-- [x] First successful vendor + arm64 pull + aarch64 boot
-
-> **Status** (2026-07-04): Kernel FULLY BOOTS on QEMU aarch64 (cortex-a72, virt, GICv3).
-> All OSTD subsystems initialize successfully. Kernel components (arch, thread,
-> driver, net, sched, process, fs, security) all pass. Initramfs unpacked to
-> rootfs. User-space ELF process successfully loaded and spawned (init=/init).
-> max_paddr = 0xC0000000 (correct 3GB for 2GB RAM + MMIO).
-> Previous FDT region 6 overflow bug RESOLVED via linker script fix + clean rebuild.
+### M1 — Core Boot ✅
+- [x] QEMU aarch64 boot → user-space init (2026-07-04)
+- [x] virtio-gpu 2D scanout with pixel output (2026-07-11)
+- [x] Multi-architecture build (aarch64, x86_64, riscv64, loongarch64)
+- [x] kei + evernight E2E ignition test
 
 ### M2 — ARM64 Hardening
-The wanywhn arm64 code is LLM-generated and QEMU-only. Hardening tasks:
-- [x] Fix FDT memory region parsing (region 6 overflows PA space) ← **RESOLVED 2026-07-04**
-- [ ] Audit all files in ostd/src/arch/aarch64/, fix LLM artifacts
-- [ ] Replace third-party GICv3 crate with in-tree driver
-- [ ] SMP / multi-core boot (PSCI secondary bring-up)
-- [ ] Real hardware boot on NanoPi R3S (RK3566)
-- [ ] Performance benchmarks vs Linux baseline
-- [x] QEMU arm64 boot reaches user-space init ← **DONE 2026-07-04**
-- [ ] Fix busybox TLS ELF loading (copy_from_slice panic)
-- [ ] Connect user-space stdout to serial console
+- [x] FDT memory region parsing fix
+- [ ] Audit ostd/src/arch/aarch64/
+- [ ] SMP multi-core boot (PSCI)
+- [ ] Real hardware boot on NanoPi R3S
 
 ### M3 — RK3566 BSP
-- [ ] GPIO (Rockchip GRF pinctrl)
-- [ ] Dual Ethernet (stmmac / RK GMAC)
-- [ ] UART (DW 8250)
-- [ ] SPI / I2C / Watchdog
-- [ ] SD/eMMC (DW MMC)
+- [ ] GPIO / Dual Ethernet / UART / SPI / I2C / Watchdog / SD
 
 ### M4 — Multi-Arch Expansion
-- [ ] RISC-V: JH7110 BSP (VisionFive 2)
-- [ ] ARMv7 evaluation
+- [ ] RISC-V: JH7110 BSP
 - [ ] x86_64: Intel N100 BSP
 
 ## Risk Assessment
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Upstream API breaks at vendor time | Medium | Vendor script + compile test + fix cycle |
-| wanywhn arm64 code has subtle bugs | High | M2 audit milestone; real HW testing |
-| Falling behind upstream features | Low | Periodic vendoring catches up in batches |
-| Upstream ships different arm64 | Low | Evaluate at vendor time; adopt if better |
+| Upstream API breaks at vendor time | Medium | Compile test + fix cycle |
+| ARM64 code bugs on real hardware | High | Hardware testing milestone |
+| Falling behind upstream features | Low | Periodic vendoring |
 

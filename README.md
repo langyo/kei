@@ -2,7 +2,7 @@
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>Rust OS kernel for industrial IoT gateways + no_std bridge library for embedded sensor nodes</strong></p>
+<p align="center"><strong>Rust OS kernel for industrial IoT gateways — derived from Asterinas (星绽), with an embedded no_std library for sensor nodes.</strong></p>
 
 <div align="center">
 
@@ -26,22 +26,25 @@
 
 </div>
 
-## What problem does KEI solve?
+## What is KEI?
 
-Industrial IoT gateways sit between field devices (sensors, PLCs, actuators)
-and the cloud. They need real-time discipline for protocol polling, a full
-network stack for cloud connectivity, safety guarantees that C-based RTOSes
-and full Linux cannot provide, and a small auditable footprint.
+KEI is a Rust OS kernel for ARM64 and RISC-V edge devices. It runs the
+[evernight](https://github.com/celestia-island/evernight) protocol broker and
+provides the syscall ABI that [aris](https://github.com/celestia-island/aris)
+(the browser engine) runs on. It also ships a `#![no_std]` library for embassy
+sensor nodes.
 
-KEI is built in Rust on a safe-kernel architecture, giving you memory safety,
-real-time capability, and a complete protocol stack in one system.
+KEI is derived from [Asterinas (星绽)](https://github.com/asterinas/asterinas),
+a Rust framekernel. It adds ARM64 board support, virtio-gpu display, industrial
+drivers, and a sensor-node wire protocol — while staying independent of upstream
+release cycles.
 
 ```mermaid
 flowchart TB
-    subgraph Gateway["KEI kernel (this repo)"]
+    subgraph Gateway["KEI kernel"]
         KERN["RTOS-grade kernel\nARM64 / RISC-V"]
-        NET["Full network stack\nMQTT · WebSocket · HTTP"]
-        DRV["Industrial protocol drivers\nModbus · CAN · S7comm"]
+        NET["Network stack\nMQTT · WebSocket · HTTP"]
+        DRV["Industrial drivers\nModbus · CAN · S7comm"]
     end
     subgraph Sensors["Sensor nodes"]
         EMB["embassy MCU firmware\nusing kei no_std library"]
@@ -54,7 +57,7 @@ flowchart TB
 
 | Component | Location | What it does |
 |-----------|----------|-------------|
-| **KEI kernel** | workspace root | Rust OS kernel for ARM64/RISC-V edge devices. Runs the [evernight](https://github.com/celestia-island/evernight) protocol broker. |
+| **KEI kernel** | workspace root | Rust OS kernel for ARM64/RISC-V. Syscall ABI, virtio-gpu, framebuffer, network stack. |
 | **kei library** | `packages/kei/` | `#![no_std]` library for embassy sensor nodes: wire protocol, manifest schema, HAL traits. |
 
 ## Quick start
@@ -77,11 +80,11 @@ See the [library guide](./docs/en/guides/kei-library.md) and
 
 ## Ecosystem
 
-- **[aris](https://github.com/celestia-island/aris)** — gateway Linux distribution
+- **[aris](https://github.com/celestia-island/aris)** — browser engine (runs on KEI's syscall ABI)
 - **[evernight](https://github.com/celestia-island/evernight)** — industrial protocol broker
-- **[kei](https://github.com/celestia-island/kei)** — this repo
+- **[entelecheia](https://github.com/celestia-island/entelecheia)** — AI agent platform
 
 ## License
 
-SySL-1.0 for KEI's own code. Vendored code under MPL-2.0.
+SySL-1.0 for KEI's own code. Vendored Asterinas code under MPL-2.0.
 See [LICENSE](./LICENSE) and [LICENSE-MPL](./LICENSE-MPL).
