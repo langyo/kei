@@ -400,12 +400,17 @@ pub(super) fn on_first_process_startup(ctx: &Context) {
         {
             use crate::thread::kernel_thread::ThreadOptions;
             let task_fn = move || {
-                // Wait ~5 minutes for init to write framebuffer data.
-                // (At ~0.5s per 256KB write, 16 writes = ~8s, but we give
-                // extra time for boot overhead.)
-                ostd::early_println!("[flush] waiting 300s for fb writes...");
-                for _ in 0..3_000_000_000u64 {
-                    core::hint::spin_loop();
+                // Wait for init to write framebuffer data by yielding the CPU.
+                // Using yield (not spin_loop) so the init process gets scheduled.
+                ostd::early_println!("[flush] yielding for 600k iterations...");
+                for i in 0..600_000u64 {
+                    if i % 100_000 == 0 && i > 0 {
+                        ostd::early_println!("[flush] still waiting... ({})", i);
+                    }
+                    // Yield to let init process run
+                    let _ = i;
+                    // Manual yield: use a lot of iterations but call the scheduler
+                    ostd::task::Task::yield_now();
                 }
                 ostd::early_println!("[flush] flushing framebuffer...");
                 aster_virtio::aarch64_raw_gpu_probe::flush_framebuffer();

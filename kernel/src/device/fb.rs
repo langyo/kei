@@ -26,6 +26,9 @@ struct Fb;
 #[derive(Debug)]
 struct FbHandle {
     framebuffer: Arc<FrameBuffer>,
+    /// Cached IoMem for the DMA buffer (Blit backends only). Acquired once
+    /// on open() and reused for all subsequent write_at calls.
+    cached_iomem: Option<ostd::io::IoMem>,
 }
 
 /// Bitfields describing the color channel layout; `struct fb_bitfield` in Linux.
@@ -243,7 +246,26 @@ impl Device for Fb {
                 "the framebuffer device is not present",
             ));
         };
-        Ok(Box::new(FbHandle { framebuffer }))
+
+        // For Blit-backed framebuffers, acquire an IoMem for the DMA buffer
+        // once and cache it. This avoids re-acquiring on every write_at call
+        // (which would fail with ENOMEM since the range is already acquired).
+        let cached_iomem = if framebuffer.io_mem().is_none() {
+            // Blit backend — try to acquire IoMem for the DMA buffer PA.
+            if let Some(pa) = framebuffer.physical_address() {
+                let size = framebuffer.buffer_size();
+                ostd::io::IoMem::acquire(pa..pa + size).ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(Box::new(FbHandle {
+            framebuffer,
+            cached_iomem,
+        }))
     }
 }
 
@@ -514,23 +536,30 @@ impl FileOps for FbHandle {
             };
             reader.skip(copied);
             Ok(copied)
+        } else if let Some(iomem) = &self.cached_iomem {
+            // Blit-backed framebuffer with cached IoMem mapping.
+            let mut new_reader = reader.clone();
+            new_reader.limit(len);
+            let result = iomem.write_fallible(offset, &mut new_reader);
+            let copied = match result {
+                Ok(copied) => copied,
+                Err((err, copied)) => {
+                    if copied > 0 { copied } else { return Err(err.into()); }
+                }
+            };
+            reader.skip(copied);
+            Ok(copied)
         } else {
+            // Fallback: use the raw BlitBackend pointer (may page-fault if
+            // the linear mapping isn't present after page table switch).
             let mut buf = vec![0u8; len];
             let remain = reader.remain().min(buf.len());
-            // Copy userspace reader into kernel buffer. VmReader does not
-            // implement VmIo, so we use a direct cursor-based copy.
-            // SAFETY: reader.cursor() points to a valid userspace buffer of
-            // at least `remain` bytes for the duration of this call.
             #[allow(unsafe_code)]
             unsafe {
                 core::ptr::copy_nonoverlapping(reader.cursor(), buf.as_mut_ptr(), remain);
             }
             reader.skip(remain);
             self.framebuffer.write_bytes_at(offset, &buf[..remain])?;
-            // NOTE: flush_all() is NOT called per-write. QEMU TCG has a limit
-            // of ~8 virtio-gpu commands, and each flush uses 2 commands.
-            // Userspace should trigger a flush via ioctl or msync after all
-            // writes are complete.
             Ok(remain)
         }
     }
