@@ -31,7 +31,7 @@ pub fn init_in_first_kthread(path_resolver: &PathResolver) -> Result<()> {
         Ok(buf) => buf,
         Err(_) => {
             ostd::early_println!("[rootfs] FDT has no initramfs, using embedded copy");
-            include_bytes!("../../../test/initramfs/build/initramfs.cpio.gz")
+            include_bytes!("../../../tests/initramfs/build/initramfs.cpio.gz")
         }
     };
     #[cfg(not(target_arch = "aarch64"))]

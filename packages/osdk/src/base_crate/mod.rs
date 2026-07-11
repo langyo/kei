@@ -251,13 +251,13 @@ fn add_manifest_dependency(
     add_manifest_dependency_to(
         dependencies,
         "osdk-frame-allocator",
-        Path::new("deps").join("frame-allocator"),
+        Path::new("..").join("deps").join("frame-allocator"),
     );
 
     add_manifest_dependency_to(
         dependencies,
         "osdk-heap-allocator",
-        Path::new("deps").join("heap-allocator"),
+        Path::new("..").join("deps").join("heap-allocator"),
     );
 
     add_manifest_dependency_to(dependencies, "ostd", Path::new("..").join("ostd"));

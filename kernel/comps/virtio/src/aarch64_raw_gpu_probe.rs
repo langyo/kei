@@ -531,21 +531,21 @@ fn init_gpu(mmio_base: usize) {
         ostd::early_println!("[virtio-gpu] SET_SCANOUT resp={:#x}", rt);
     }
 
-    // ── 5. Mark GPU ready, then draw test pattern & flush ───────────────
-    // GPU_READY must be set BEFORE draw_test_pattern/flush_framebuffer,
+    // ── 5. Mark GPU ready, clear screen to background color & flush ─────
+    // GPU_READY must be set BEFORE flush_framebuffer,
     // because flush_framebuffer() checks GPU_READY as a guard.
     GPU_READY.store(1, Ordering::Relaxed);
-    draw_test_pattern();
 
-    // Quick readback of the first framebuffer pixel to confirm the draw landed.
-    // (Avoids AT S1E1R here to keep the path fast and trap-free; QEMU-side
-    // `xp` is the authoritative check that stores reach physical RAM.)
+    // Clear the framebuffer to the console background color (One Half Dark).
+    // This replaces the old colorful test pattern with a clean dark screen,
+    // ready for the VT console to render text once the component system starts.
     unsafe {
-        let fb_va = core::ptr::read_volatile(core::ptr::addr_of!(FRAMEBUFFER_VA)) as *const u32;
-        let v0 = read_volatile(fb_va);
-        ostd::early_println!("[virtio-gpu] readback VA[0]={:#x}", v0);
+        let fb = FRAMEBUFFER_VA as *mut u32;
+        let bg: u32 = 0xFF282C34; // One Half Dark background
+        for i in 0..(FB_WIDTH as usize * FB_HEIGHT as usize) {
+            write_volatile(fb.add(i), bg);
+        }
     }
-
     flush_framebuffer();
 
     ostd::early_println!(

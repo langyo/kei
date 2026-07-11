@@ -22,7 +22,7 @@ kcmd_args = [
     "init=/init",
 ]
 init_args = ["sh", "-l"]
-initramfs = "test/initramfs/build/initramfs.cpio.gz"
+initramfs = "tests/initramfs/build/initramfs.cpio.gz"
 
 # Special options for testing
 [test.qemu]
@@ -122,7 +122,7 @@ qemu.args = """\
 
 # aarch64 uses its own initramfs (with dropbear SSH server) and init args.
 [scheme."aarch64".run.boot]
-initramfs = "test/initramfs/build/initramfs_aarch64.cpio.gz"
+initramfs = "tests/initramfs/build/initramfs_aarch64.cpio.gz"
 kcmd_args = [
     "SHELL=/bin/sh",
     "LOGNAME=root",
