@@ -37,12 +37,16 @@ pub fn init_in_first_kthread(path_resolver: &PathResolver) -> Result<()> {
     #[cfg(not(target_arch = "aarch64"))]
     let initramfs_buf: &[u8] = initramfs_buf?;
 
+    ostd::early_println!("[rootfs] initramfs buf size = {} bytes", initramfs_buf.len());
+
     let (reader, suffix) = match &initramfs_buf[..4] {
         // Gzip magic number: 0x1F 0x8B
         &[0x1F, 0x8B, _, _] => {
+            ostd::early_println!("[rootfs] gzip magic detected, decompressing...");
             let decompressed = DeflateDecoder::new(initramfs_buf)
                 .decode_gzip()
                 .map_err(|_| Error::with_message(Errno::EINVAL, "gzip decompression failed"))?;
+            ostd::early_println!("[rootfs] decompressed to {} bytes", decompressed.len());
             (Cow::Owned(decompressed), ".gz")
         }
         _ => (Cow::Borrowed(initramfs_buf), ""),
@@ -52,8 +56,17 @@ pub fn init_in_first_kthread(path_resolver: &PathResolver) -> Result<()> {
 
     let mut decoder = CpioDecoder::new(Cursor::new(reader));
 
+    let mut entry_count = 0u32;
     while let Some(entry_result) = decoder.next() {
         let mut entry = entry_result?;
+        entry_count += 1;
+        if entry_count <= 20 || entry_count % 50 == 0 {
+            ostd::early_println!(
+                "[rootfs] entry #{}: {}",
+                entry_count,
+                entry.name()
+            );
+        }
         if let Err(e) = try_append_entry_to_rootfs(&mut entry, path_resolver) {
             ostd::early_println!(
                 "[rootfs] failed to add entry {}: {:?}",

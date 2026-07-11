@@ -303,8 +303,11 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
         ostd::info!("net::init (deferred)");
         crate::net::init();
     }
+    ostd::early_println!("[kthread] before net::init_in_first_kthread");
     crate::net::init_in_first_kthread();
+    ostd::early_println!("[kthread] after net::init_in_first_kthread, before fs::init_in_first_kthread");
     crate::fs::init_in_first_kthread(path_resolver);
+    ostd::early_println!("[kthread] after fs::init_in_first_kthread (rootfs ready)");
     #[cfg(any(target_arch = "x86_64", target_arch = "riscv64"))]
     crate::vdso::init_in_first_kthread();
 }
