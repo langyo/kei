@@ -536,17 +536,10 @@ fn init_gpu(mmio_base: usize) {
     // because flush_framebuffer() checks GPU_READY as a guard.
     GPU_READY.store(1, Ordering::Relaxed);
 
-    // Clear the framebuffer to the console background color (One Half Dark).
-    // This replaces the old colorful test pattern with a clean dark screen,
-    // ready for the VT console to render text once the component system starts.
-    unsafe {
-        let fb = FRAMEBUFFER_VA as *mut u32;
-        let bg: u32 = 0xFF282C34; // One Half Dark background
-        for i in 0..(FB_WIDTH as usize * FB_HEIGHT as usize) {
-            write_volatile(fb.add(i), bg);
-        }
-    }
-    flush_framebuffer();
+    // Skip the framebuffer clear — writing 1M u32 to PA 0x60000000 causes a
+    // page fault in QEMU TCG mode after the GPU init sequence. The screen
+    // will be black until user-space aris-render writes to /dev/fb0.
+    // (Restoring this requires debugging the linear-mapping write fault.)
 
     ostd::early_println!(
         "[virtio-gpu] display ready: {}x{} scanout was {}x{}",
@@ -557,6 +550,20 @@ fn init_gpu(mmio_base: usize) {
     );
 
     // Publish this framebuffer so the VT/console subsystem can use it.
+    // NOTE: The publish() call is deferred to the Kthread init stage
+    // (init.rs first_kthread) where the heap allocator is fully initialized.
+    // Calling Arc::new + publish during the Bootstrap stage page-faults on
+    // QEMU TCG aarch64.
+    ostd::early_println!("[virtio-gpu] display ready, publish deferred to Kthread");
+}
+
+/// Publish the framebuffer to the display subsystem. Must be called from
+/// the Kthread init stage (after the heap allocator is fully set up).
+/// Returns true if the framebuffer was published successfully.
+pub fn publish_framebuffer() -> bool {
+    if !is_ready() {
+        return false;
+    }
     use alloc::sync::Arc;
     let fb_base = unsafe { FRAMEBUFFER_VA };
     let fb_size = FB_WIDTH as usize * FB_HEIGHT as usize * FB_BPP;
@@ -570,10 +577,15 @@ fn init_gpu(mmio_base: usize) {
     );
     aster_framebuffer::framebuffer::publish(Arc::new(fb));
     ostd::early_println!("[virtio-gpu] framebuffer published for VT console");
+    true
 }
 
 /// Flush callback for the published FrameBuffer. Called by VT FramebufferConsole
-/// after rendering. Ignores the dirty rect and flushes the entire framebuffer.
+/// after rendering. Intentionally a no-op — sending TRANSFER_TO_HOST_2D +
+/// RESOURCE_FLUSH commands hangs QEMU TCG after the initial GPU setup.
+/// QEMU's virtio-gpu reads the DMA-backed framebuffer directly on each
+/// scanout refresh, so writes to the framebuffer memory are visible without
+/// an explicit flush.
 fn raw_flush_callback(
     _backend: &aster_framebuffer::framebuffer::BlitBackend,
     _x: usize,
@@ -581,7 +593,7 @@ fn raw_flush_callback(
     _width: usize,
     _height: usize,
 ) {
-    flush_framebuffer();
+    // No-op — see comment above.
 }
 
 /// Push the whole framebuffer to the device: TRANSFER_TO_HOST_2D then

@@ -631,6 +631,6 @@ pub(super) fn init_in_first_kthread() {
 /// Called by the virtio-gpu driver once `framebuffer::publish` has installed
 /// a `FrameBuffer`. Idempotent: the char device registration is a no-op if
 /// already registered (the `Fb` device is stateless).
-pub(super) fn register_late() {
+pub fn register_late() {
     char::register(Arc::new(Fb)).expect("failed to register framebuffer char device");
 }

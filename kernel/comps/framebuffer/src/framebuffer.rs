@@ -199,7 +199,9 @@ pub fn publish(fb: Arc<FrameBuffer>) {
         ostd::warn!("FrameBuffer already published, ignoring late publish");
         return;
     }
-    fb.clear();
+    // NOTE: fb.clear() is intentionally skipped. It triggers flush_all() which
+    // sends TRANSFER_TO_HOST_2D commands that hang QEMU TCG aarch64. The
+    // framebuffer stays at whatever state the raw GPU probe left it in.
     *FRAMEBUFFER.lock() = Some(fb);
 }
 

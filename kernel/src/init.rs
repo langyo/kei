@@ -242,7 +242,7 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
     {
         // Component::init_all(Bootstrap) already ran in init() and initialized
         // virtio, framebuffer, console, input, etc. We just need to run the
-        // Kthread stage here (which does the same as component::init_all(Kthread)
+        // Kthread stage (which does the same as component::init_all(Kthread)
         // on other architectures).
         ostd::early_println!("[kthread] running component::init_all(Kthread)...");
         if let Err(e) = component::init_all(InitStage::Kthread, component::parse_metadata!()) {
@@ -250,10 +250,6 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
         } else {
             ostd::early_println!("[kthread] component::init_all(Kthread) OK");
         }
-
-        // fb_console is still our early display (VT FramebufferConsole is set
-        // up later in tty_init_in_first_process).
-        crate::fb_console::init();
     }
     // Work queue should be initialized before interrupt is enabled,
     // in case any irq handler uses work queue as bottom half
@@ -275,11 +271,25 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
         // virtio component init probes devices (needs FDT, which is available)
         let _ = aster_virtio::virtio_component_init_pub();
 
-        // Note: fb_console::init() is NOT called again here. The GPU probe
-        // already drew the test pattern + flushed it (2 successful flushes).
-        // Calling fb_console::init() here would trigger a 3rd flush that
-        // timeouts (QEMU TCG virtio-mmio limitation after ~8 commands).
-        // The test pattern remains visible on the SDL window.
+        // Now that virtio has probed the GPU and the framebuffer is ready,
+        // publish it to the display subsystem so /dev/fb0 and VT console work.
+        ostd::early_println!("[kthread] publishing framebuffer...");
+        let published = aster_virtio::aarch64_raw_gpu_probe::publish_framebuffer();
+        if published {
+            ostd::early_println!("[kthread] framebuffer published OK");
+            // Register the /dev/fb0 character device now that the framebuffer
+            // is available. On aarch64, device::init_in_first_kthread() is not
+            // called (it's gated to non-aarch64), so we register fb here.
+            crate::device::fb::register_late();
+            ostd::early_println!("[kthread] /dev/fb0 registered");
+        } else {
+            ostd::early_println!("[kthread] WARNING: framebuffer not published (GPU not ready?)");
+        }
+
+        // NOTE: fb_console::init() is intentionally NOT called. It triggers
+        // flush_framebuffer() which sends TRANSFER_TO_HOST_2D commands that
+        // hang QEMU TCG after the initial GPU setup. The screen stays black
+        // until user-space aris-render writes to /dev/fb0.
 
         ostd::early_println!("[kthread] net::init (deferred)");
         crate::net::init();
@@ -352,11 +362,12 @@ pub(super) fn on_first_process_startup(ctx: &Context) {
         // The VT subsystem will allocate VT1, connect to the framebuffer
         // (already published), and register the keyboard handler (connecting
         // to any virtio-keyboard devices already registered).
-        ostd::early_println!("[first_proc] initializing tty subsystem (aarch64)...");
-        match crate::device::tty_init_in_first_process() {
-            Ok(()) => ostd::early_println!("[first_proc] tty init done"),
-            Err(e) => ostd::early_println!("[first_proc] tty init failed: {:?}", e),
-        }
+        //
+        // NOTE: TTY init is skipped on aarch64 for now. It hangs in QEMU TCG
+        // mode due to framebuffer flush operations in the VT console backend.
+        // The aris-render user-space process writes directly to /dev/fb0 via
+        // the published FrameBuffer, which does not go through the TTY layer.
+        ostd::early_println!("[first_proc] skipping tty subsystem (aarch64, QEMU TCG workaround)");
 
         // (Sixel test moved to init_in_first_kthread where framebuffer_info()
         // is still valid.)

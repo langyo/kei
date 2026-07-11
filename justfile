@@ -113,6 +113,12 @@ build-board BOARD:
 dev ARCH="":
     just run {{ARCH}}
 
+# Run kei with aris-rendered UI filling the entire screen.
+# Usage: just render             # aarch64 QEMU + aris-rendered desktop
+[script('bash')]
+render ARCH="aarch64":
+    RENDER_UI=1 just _run-aarch64 0
+
 # Build only (no QEMU launch).
 dev-build ARCH="":
     just build-arch {{ARCH}}
@@ -287,7 +293,14 @@ _run-aarch64 HEADLESS:
 
     # Convert paths for Windows QEMU
     WINIMAGE=$(cygpath -w "target/osdk/aster-kernel/aster-kernel-osdk-bin.image" 2>/dev/null || echo "target/osdk/aster-kernel/aster-kernel-osdk-bin.image")
-    WININITRD=$(cygpath -w "tests/initramfs/build/initramfs_aarch64.cpio.gz" 2>/dev/null || echo "tests/initramfs/build/initramfs_aarch64.cpio.gz")
+    # Use the aris-rendered UI initramfs if RENDER_UI=1, else the SSH/shell initramfs.
+    if [ "$RENDER_UI" = "1" ]; then
+        INITRAMFS_PATH="tests/initramfs/build/initramfs_render_new.cpio.gz"
+        echo "[run] Using aris-rendered UI initramfs"
+    else
+        INITRAMFS_PATH="tests/initramfs/build/initramfs_aarch64.cpio.gz"
+    fi
+    WININITRD=$(cygpath -w "$INITRAMFS_PATH" 2>/dev/null || echo "$INITRAMFS_PATH")
     WINLOG=$(cygpath -w "target/qemu_serial.log" 2>/dev/null || echo "target/qemu_serial.log")
 
     # Launch QEMU in the foreground. The SDL window appears, and the terminal
