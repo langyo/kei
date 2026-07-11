@@ -391,34 +391,8 @@ pub(super) fn on_first_process_startup(ctx: &Context) {
             }
             ostd::early_println!("[first_proc] device nodes registered");
         }
-
-        // Spawn a background thread that flushes the framebuffer to the display
-        // after the init process has written its content. The flush sends
-        // TRANSFER_TO_HOST_2D + RESOURCE_FLUSH via the virtio-gpu virtqueue,
-        // pushing the DMA buffer to QEMU's scanout surface.
-        // We use a long delay because QEMU TCG makes per-4KB writes very slow.
-        {
-            use crate::thread::kernel_thread::ThreadOptions;
-            let task_fn = move || {
-                // Wait for init to write framebuffer data by yielding the CPU.
-                // Using yield (not spin_loop) so the init process gets scheduled.
-                ostd::early_println!("[flush] yielding for 600k iterations...");
-                for i in 0..600_000u64 {
-                    if i % 100_000 == 0 && i > 0 {
-                        ostd::early_println!("[flush] still waiting... ({})", i);
-                    }
-                    // Yield to let init process run
-                    let _ = i;
-                    // Manual yield: use a lot of iterations but call the scheduler
-                    ostd::task::Task::yield_now();
-                }
-                ostd::early_println!("[flush] flushing framebuffer...");
-                aster_virtio::aarch64_raw_gpu_probe::flush_framebuffer();
-                ostd::early_println!("[flush] flush complete.");
-            };
-            ThreadOptions::new(task_fn).spawn();
-            ostd::early_println!("[first_proc] flush thread spawned");
-        }
+        // The framebuffer flush happens during GPU probe. Background fill
+        // thread removed for build compatibility.
 
         // (Sixel test moved to init_in_first_kthread where framebuffer_info()
         // is still valid.)

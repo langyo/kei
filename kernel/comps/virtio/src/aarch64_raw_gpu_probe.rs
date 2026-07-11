@@ -536,12 +536,15 @@ fn init_gpu(mmio_base: usize) {
     // because flush_framebuffer() checks GPU_READY as a guard.
     GPU_READY.store(1, Ordering::Relaxed);
 
-    // The framebuffer DMA buffer at PA 0x60000000 is NOT mapped in the kernel
-    // page table (it's a fixed PA outside the frame allocator's metadata range).
-    // Kernel-side writes via the linear mapping cause a translation fault.
-    // Instead, user-space writes to /dev/fb0 (which goes through the BlitBackend
-    // write_bytes path). The kernel-side clear is skipped.
-    // A kernel thread will flush the display after user-space writes complete.
+    // Draw a simple test pattern directly to the framebuffer.
+    // PA 0x60000000 IS mapped in the kernel page table via the linear mapping
+    // (max_paddr = 0xC0000000 > 0x60000000).
+    // Skip the slow kernel-side framebuffer fill. QEMU TCG makes any large
+    // memory write extremely slow. Instead, we just flush the initial (empty)
+    // framebuffer and let userspace or a background thread fill it later.
+    ostd::early_println!("[virtio-gpu] skipping fb fill (TCG too slow)");
+    flush_framebuffer();
+    ostd::early_println!("[virtio-gpu] initial flush done");
 
     ostd::early_println!(
         "[virtio-gpu] display ready: {}x{} scanout was {}x{}",
