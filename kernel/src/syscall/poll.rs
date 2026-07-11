@@ -113,8 +113,16 @@ pub(super) fn do_poll(
     // become visible to select/accept without relying on cross-thread wakeups.
     #[cfg(target_arch = "aarch64")]
     {
-        let wq = ostd::sync::WaitQueue::new();
-        loop {
+        // For zero or very short timeouts, return immediately (non-blocking).
+        // For None timeout (infinite), loop forever.
+        // For finite timeouts, use a bounded loop.
+        let max_iters = match timeout {
+            None => usize::MAX,  // infinite
+            Some(d) if d.is_zero() => 1,  // non-blocking: one check
+            Some(d) => (d.as_millis().max(1) * 100) as usize,  // ~10 checks per ms
+        };
+
+        for _ in 0..max_iters {
             // Poll network interfaces to process pending packets
             // and trigger timer callbacks. This also completes any
             // in-progress TCP handshakes.
@@ -128,6 +136,9 @@ pub(super) fn do_poll(
             // Give other threads a chance to run.
             ostd::task::Task::yield_now();
         }
+
+        // Timeout expired with no ready fds.
+        return Ok(0);
     }
 
     #[cfg(not(target_arch = "aarch64"))]
