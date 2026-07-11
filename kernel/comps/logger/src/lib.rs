@@ -40,4 +40,7 @@ fn init() -> Result<(), ComponentInitError> {
 /// Call this early in the boot path to enable leveled logging with timestamps.
 pub fn init_manual() {
     aster_logger::init();
+    // Set the default log level to Info so boot messages are visible
+    // without needing the ostd.log_level= kernel cmdline parameter.
+    ostd::log::set_max_level(ostd::log::LevelFilter::Info);
 }
