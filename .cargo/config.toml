@@ -19,9 +19,9 @@
 # the aarch64 target dependencies (fdt, unwinding) that kei's fork adds.
 
 [patch.crates-io]
-ostd = { path = "ostd" }
-ostd-pod = { path = "ostd/libs/ostd-pod" }
-ostd-macros = { path = "ostd/libs/ostd-macros" }
-ostd-test = { path = "ostd/libs/ostd-test" }
-osdk-frame-allocator = { path = "osdk/deps/frame-allocator" }
-osdk-heap-allocator = { path = "osdk/deps/heap-allocator" }
+ostd = { path = "packages/ostd" }
+ostd-pod = { path = "packages/ostd/libs/ostd-pod" }
+ostd-macros = { path = "packages/ostd/libs/ostd-macros" }
+ostd-test = { path = "packages/ostd/libs/ostd-test" }
+osdk-frame-allocator = { path = "packages/osdk/deps/frame-allocator" }
+osdk-heap-allocator = { path = "packages/osdk/deps/heap-allocator" }

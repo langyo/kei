@@ -26,27 +26,35 @@ UPSTREAM_URL = "https://github.com/asterinas/asterinas.git"
 
 # Paths that are OURS — preserved across vendoring
 OUR_PATHS = [
-    "ostd/src/arch/aarch64",
+    "packages/ostd/src/arch/aarch64",
     "kernel/src/arch/aarch64",
-    "bsp",
-    "board",
+    "packages/bsp",
+    "configs/board",
     "configs",
     "scripts",
     "docs",
     ".github",
     ".gitignore",
-    ".editorconfig",
+    ".editorcode",
     "justfile",
     "PLAN.md",
     "README.md",
     "rust-toolchain.toml",
     "clippy.toml",
     "deny.toml",
-    "Cargo.toml",  # Merged: upstream base + kei bsp/ members
+    "Cargo.toml",  # Merged: upstream base + kei packages/bsp/ members
 ]
 
-# Directories refreshed from upstream on each vendor
-UPSTREAM_DIRS = ["ostd", "kernel", "osdk", "test", "tools"]
+# Directories refreshed from upstream on each vendor.
+# Map: upstream_dir → local_dir (for dirs that moved).
+UPSTREAM_DIR_MAP = {
+    "ostd": "packages/ostd",
+    "kernel": "kernel",
+    "osdk": "packages/osdk",
+    "test": "tests",
+    "tools": "scripts/tools",
+}
+UPSTREAM_DIRS = list(UPSTREAM_DIR_MAP.keys())
 
 # Root-level files tracked from upstream (Cargo.toml gets merged, not replaced)
 UPSTREAM_FILES = ["Cargo.lock", "Makefile", "OSDK.toml",

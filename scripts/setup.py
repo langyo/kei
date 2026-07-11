@@ -49,13 +49,13 @@ def main() -> int:
     cf.blank()
     cf.step("[2/2] Status check")
     check_dir(
-        PROJECT_ROOT / "ostd",
-        "ostd/",
+        PROJECT_ROOT / "packages/ostd",
+        "packages/ostd/",
         "run 'just vendor' to absorb upstream",
     )
     check_dir(
-        PROJECT_ROOT / "ostd" / "src" / "arch" / "aarch64",
-        "ostd/src/arch/aarch64/",
+        PROJECT_ROOT / "packages/ostd" / "src" / "arch" / "aarch64",
+        "packages/ostd/src/arch/aarch64/",
         "run 'just pull-arm64'",
     )
 
