@@ -12,9 +12,8 @@
 
 set unstable
 set shell := ["bash", "-c"]
-# On Windows, use Git Bash (not WSL) for simple recipes. Recipes that need
-# WSL (like _build-aarch64) call `wsl` explicitly.
-set windows-shell := ["bash.exe", "-c"]
+# On Windows, use PowerShell 7 (pwsh). Requires pwsh.exe in PATH.
+set windows-shell := ["pwsh.exe", "-NoProfile", "-Command"]
 set lists
 
 import "./celestia-devtools.just"
