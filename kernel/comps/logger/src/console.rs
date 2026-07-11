@@ -13,12 +13,18 @@ use ostd::sync::{LocalIrqDisabled, SpinLockGuard};
 
 /// Prints the formatted arguments to the standard output.
 pub fn _print(args: fmt::Arguments) {
-    // We must call `all_devices_lock` instead of `all_devices` here, as `all_devices` invokes the
-    // `clone` method of `String` and `Arc`, which may lead to a deadlock when there is low memory
-    // in the heap. (The heap allocator will log a message when memory is low.)
-    //
-    // Also, holding the lock will prevent the logs from interleaving.
-    let devices = aster_console::all_devices_lock();
+    // If the console component hasn't been initialized yet (e.g., during
+    // early aarch64 boot), fall back to early_print (raw serial output).
+    // This prevents panics when info!/println! are called before the
+    // component system is set up.
+    let Some(component) = aster_console::component() else {
+        ostd::console::early_print(args);
+        return;
+    };
+
+    // We must call lock on the component's device table to prevent
+    // interleaving and avoid clone-related deadbacks under low memory.
+    let devices = component.console_device_table.lock();
 
     struct Printer<'a>(
         SpinLockGuard<'a, BTreeMap<String, Arc<dyn AnyConsoleDevice>>, LocalIrqDisabled>,

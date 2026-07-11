@@ -37,10 +37,13 @@ fn print_logs(record: &Record, timestamp: &Duration) {
         Level::Emerg | Level::Alert | Level::Crit => Style::new().red().bold(),
     };
 
+    let module = record.module_path();
+
     super::_print(format_args!(
-        "{} {:<6}: {}{}\n",
+        "{} {:<5} {:<24}: {}{}\n",
         timestamp_style.style(format_args!("[{:>6}.{:03}]", secs, millis)),
         level_style.style(record.level()),
+        timestamp_style.style(module),
         record_style.style(record.prefix()),
         record_style.style(record.args())
     ));
@@ -50,12 +53,14 @@ fn print_logs(record: &Record, timestamp: &Duration) {
 fn print_logs(record: &Record, timestamp: &Duration) {
     let secs = timestamp.as_secs();
     let millis = timestamp.subsec_millis();
+    let module = record.module_path();
 
     super::_print(format_args!(
-        "[{:>6}.{:03}] {:<6}: {}{}\n",
+        "[{:>6}.{:03}] {:<5} {:<24}: {}{}\n",
         secs,
         millis,
         record.level(),
+        module,
         record.prefix(),
         record.args()
     ));

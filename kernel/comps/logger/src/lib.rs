@@ -35,3 +35,9 @@ fn init() -> Result<(), ComponentInitError> {
     aster_logger::init();
     Ok(())
 }
+
+/// Manual initialization for aarch64 where the component system is bypassed.
+/// Call this early in the boot path to enable leveled logging with timestamps.
+pub fn init_manual() {
+    aster_logger::init();
+}
