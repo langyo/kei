@@ -247,20 +247,11 @@ impl Device for Fb {
             ));
         };
 
-        // For Blit-backed framebuffers, acquire an IoMem for the DMA buffer
-        // once and cache it. This avoids re-acquiring on every write_at call
-        // (which would fail with ENOMEM since the range is already acquired).
-        let cached_iomem = if framebuffer.io_mem().is_none() {
-            // Blit backend — try to acquire IoMem for the DMA buffer PA.
-            if let Some(pa) = framebuffer.physical_address() {
-                let size = framebuffer.buffer_size();
-                ostd::io::IoMem::acquire(pa..pa + size).ok()
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        // Note: we intentionally do NOT acquire an IoMem for Blit-backed
+        // framebuffers here. The IoMem kvirt_area path triggers an EL1 page
+        // fault on aarch64 QEMU TCG after repeated writes (see write_at).
+        // Instead, write_at uses the BlitBackend's linear-mapped VA directly.
+        let cached_iomem: Option<ostd::io::IoMem> = None;
 
         Ok(Box::new(FbHandle {
             framebuffer,
@@ -518,8 +509,15 @@ impl FileOps for FbHandle {
         }
 
         // For Mmio-backed framebuffers, use the fallible VmIo path. For Blit
-        // backends, copy via a stack buffer then push to the backing DMA
-        // region (and flush so the host scanout updates).
+        // backends, write directly to the linear-mapped DMA buffer VA.
+        //
+        // On aarch64 QEMU TCG, the IoMem kvirt_area path triggers an EL1 page
+        // fault (ESR=0x96000041) after repeated write() syscalls, because the
+        // dynamically-allocated KVirtArea mapping for the fb DMA buffer becomes
+        // invalid. The BlitBackend.base address (LINEAR_BASE + 0x60000000) uses
+        // the fixed-PA linear mapping that is verified stable (PLAN.md).
+        // So for Blit backends we bypass IoMem entirely and copy from the
+        // userspace reader cursor directly into the fb VA.
         if let Some(io_mem) = self.framebuffer.io_mem() {
             let mut new_reader = reader.clone();
             new_reader.limit(len);
@@ -536,22 +534,11 @@ impl FileOps for FbHandle {
             };
             reader.skip(copied);
             Ok(copied)
-        } else if let Some(iomem) = &self.cached_iomem {
-            // Blit-backed framebuffer with cached IoMem mapping.
-            let mut new_reader = reader.clone();
-            new_reader.limit(len);
-            let result = iomem.write_fallible(offset, &mut new_reader);
-            let copied = match result {
-                Ok(copied) => copied,
-                Err((err, copied)) => {
-                    if copied > 0 { copied } else { return Err(err.into()); }
-                }
-            };
-            reader.skip(copied);
-            Ok(copied)
         } else {
-            // Fallback: use the raw BlitBackend pointer (may page-fault if
-            // the linear mapping isn't present after page table switch).
+            // Blit-backed framebuffer: copy userspace bytes into a kernel
+            // buffer (VmReader cursor points to fallible userspace memory),
+            // then write_bytes_at pushes them to the DMA buffer via the
+            // stable linear mapping.
             let mut buf = vec![0u8; len];
             let remain = reader.remain().min(buf.len());
             #[allow(unsafe_code)]
@@ -560,6 +547,11 @@ impl FileOps for FbHandle {
             }
             reader.skip(remain);
             self.framebuffer.write_bytes_at(offset, &buf[..remain])?;
+            // Push pixels to the host scanout. flush_all() invokes the Blit
+            // backend's flush callback, which sends TRANSFER_TO_HOST_2D +
+            // RESOURCE_FLUSH to the virtio-gpu. The callback throttles
+            // internally to avoid QEMU TCG command-queue overflow.
+            self.framebuffer.flush_all();
             Ok(remain)
         }
     }

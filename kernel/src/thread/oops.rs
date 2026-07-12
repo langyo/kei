@@ -92,6 +92,12 @@ fn panic_handler(info: &core::panic::PanicInfo) -> ! {
         } else {
             ostd::early_println!("[OOPS] {}", info.message());
         }
+        // Give the UART FIFO time to drain before we halt, otherwise the
+        // OOPS line gets truncated when QEMU exits on abort().
+        for _ in 0..5_000_000 {
+            core::hint::spin_loop();
+        }
+        ostd::early_println!("[OOPS] pre-abort drain complete");
     }
 
     let message = info.message();

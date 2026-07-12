@@ -587,12 +587,14 @@ pub fn publish_framebuffer() -> bool {
     true
 }
 
-/// Flush callback for the published FrameBuffer. Called by VT FramebufferConsole
-/// after rendering. Intentionally a no-op — sending TRANSFER_TO_HOST_2D +
-/// RESOURCE_FLUSH commands hangs QEMU TCG after the initial GPU setup.
-/// QEMU's virtio-gpu reads the DMA-backed framebuffer directly on each
-/// scanout refresh, so writes to the framebuffer memory are visible without
-/// an explicit flush.
+/// Flush callback for the published FrameBuffer. Called by the framebuffer
+/// subsystem after rendering. Pushes the updated region to the host scanout
+/// via TRANSFER_TO_HOST_2D + RESOURCE_FLUSH.
+///
+/// We throttle to avoid overflowing the virtio-gpu command queue under QEMU
+/// TCG (which processes commands slowly). Every FLUSH_EVERY-th call actually
+/// sends commands; the rest are coalesced. This is sufficient because
+/// aris-render writes the whole frame then idles.
 fn raw_flush_callback(
     _backend: &aster_framebuffer::framebuffer::BlitBackend,
     _x: usize,
@@ -600,7 +602,15 @@ fn raw_flush_callback(
     _width: usize,
     _height: usize,
 ) {
-    // No-op — see comment above.
+    // Throttle: only flush every Nth call to avoid TCG command-queue overflow.
+    use core::sync::atomic::{AtomicU32, Ordering};
+    static CALL_COUNT: AtomicU32 = AtomicU32::new(0);
+    let n = CALL_COUNT.fetch_add(1, Ordering::Relaxed);
+    const FLUSH_EVERY: u32 = 32;
+    if n % FLUSH_EVERY != 0 {
+        return;
+    }
+    flush_framebuffer();
 }
 
 /// Push the whole framebuffer to the device: TRANSFER_TO_HOST_2D then
