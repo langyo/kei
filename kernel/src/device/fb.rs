@@ -535,24 +535,31 @@ impl FileOps for FbHandle {
             reader.skip(copied);
             Ok(copied)
         } else {
-            // Blit-backed framebuffer: copy userspace bytes into a kernel
-            // buffer (VmReader cursor points to fallible userspace memory),
-            // then write_bytes_at pushes them to the DMA buffer via the
-            // stable linear mapping.
-            let mut buf = vec![0u8; len];
-            let remain = reader.remain().min(buf.len());
-            #[allow(unsafe_code)]
-            unsafe {
-                core::ptr::copy_nonoverlapping(reader.cursor(), buf.as_mut_ptr(), remain);
+            // Blit-backed framebuffer: copy userspace bytes into the DMA buffer
+            // via the stable linear mapping. Use a small chunk buffer to avoid
+            // large kernel heap allocations (which can fail/OOM for 1.2MB writes).
+            const CHUNK_SIZE: usize = 4096;
+            let mut chunk = vec![0u8; CHUNK_SIZE];
+            let mut total_copied = 0;
+            let mut cur_offset = offset;
+            while total_copied < len {
+                let to_copy = (len - total_copied).min(CHUNK_SIZE);
+                let remain = reader.remain().min(to_copy);
+                if remain == 0 {
+                    break;
+                }
+                #[allow(unsafe_code)]
+                unsafe {
+                    core::ptr::copy_nonoverlapping(reader.cursor(), chunk.as_mut_ptr(), remain);
+                }
+                reader.skip(remain);
+                self.framebuffer.write_bytes_at(cur_offset, &chunk[..remain])?;
+                total_copied += remain;
+                cur_offset += remain;
             }
-            reader.skip(remain);
-            self.framebuffer.write_bytes_at(offset, &buf[..remain])?;
-            // Push pixels to the host scanout. flush_all() invokes the Blit
-            // backend's flush callback, which sends TRANSFER_TO_HOST_2D +
-            // RESOURCE_FLUSH to the virtio-gpu. The callback throttles
-            // internally to avoid QEMU TCG command-queue overflow.
+            // Push pixels to the host scanout.
             self.framebuffer.flush_all();
-            Ok(remain)
+            Ok(total_copied)
         }
     }
 }

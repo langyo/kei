@@ -115,7 +115,8 @@ static void draw_text(int x, int y, const char *s, uint32_t color, int scale) {
 
 int main(int argc, char **argv) {
     // Allocate framebuffer via mmap (works with TLB flush fix; .bss does not)
-    fb = mmap(NULL, FB_W * FB_H * BPP, PROT_READ | PROT_WRITE,
+    int fb_size = FB_W * FB_H * BPP;
+    fb = mmap(NULL, fb_size, PROT_READ | PROT_WRITE,
               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (fb == MAP_FAILED) {
         const char msg[] = "kei_desktop: mmap fb failed\n";
@@ -123,9 +124,37 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    // Clear to dark background
-    memset(fb, 0x34, sizeof(fb)); // 0x3428 -- approximate; fix below
+    write(2, "1:mmap\n", 7);
+    // Fill entire fb buffer with a test color (write 1.2MB to test stability)
+    for (int i = 0; i < FB_W * FB_H; i++) fb[i] = C_HEADER;
+    write(2, "2:fill\n", 7);
+    // Verify
+    int bad = 0;
+    for (int i = 0; i < FB_W * FB_H; i++) if (fb[i] != C_HEADER) bad++;
+    write(2, "3:verify\n", 9);
+    if (bad > 0) { char m[32]; int n=snprintf(m,32,"bad=%d\n",bad); write(2,m,n); }
+
+    // Draw UI (commented out for diagnostic — re-enable once fill is stable)
     fill_rect(0, 0, FB_W, FB_H, C_BG);
+    fill_rect(0, 0, FB_W, 50, C_HEADER);
+    draw_text(20, 15, "KEI BROWSER", C_WHITE, 3);
+    fill_rect(10, 58, FB_W - 20, 28, C_ADDRBG);
+    draw_text(18, 65, "https://celestia.world/kei", C_TEXT, 2);
+    fill_rect(20, 100, FB_W - 40, 80, C_CARD);
+    draw_text(30, 110, "SYSTEM STATUS", C_HEADER, 2);
+    draw_text(30, 132, "ARIS-RENDER PIPELINE OK", C_GREEN, 2);
+    draw_text(30, 152, "FRAMEBUFFER 640X480 BGRX", C_TEXT, 2);
+    fill_rect(20, 195, FB_W - 40, 80, C_CARD);
+    draw_text(30, 205, "RESOURCES", C_HEADER, 2);
+    draw_text(30, 227, "CPU 12 PCT", C_ACCENT, 2);
+    draw_text(30, 247, "MEM 256MB NET 1.2G", C_TEXT, 2);
+    fill_rect(20, 290, FB_W - 40, 80, C_CARD);
+    draw_text(30, 300, "DISPLAY", C_HEADER, 2);
+    draw_text(30, 322, "VIRTIO-GPU SCANOUT", C_TEXT, 2);
+    draw_text(30, 342, "/dev/fb0 DMA BACKED", C_TEXT, 2);
+    draw_text(20, 400, "KEI OS - ARIS DESKTOP", C_TEXT, 2);
+    draw_text(20, 425, "QEMU AARCH64 - WSL2", C_ACCENT, 2);
+    write(2, "4:draw\n", 7);
 
     // Header bar (blue, 50px tall)
     fill_rect(0, 0, FB_W, 50, C_HEADER);
