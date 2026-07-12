@@ -8,10 +8,11 @@ impl Vmar {
         let address = page_fault_info.address;
 
         // WORKAROUND: Map a zeroed page at the NULL region (0x0-0x1000) on
-        // demand. DISABLED for debugging — let the crash happen to get a
-        // backtrace from the trap handler.
-        // #[cfg(target_arch = "aarch64")]
-        if false && address < ostd::mm::PAGE_SIZE {
+        // demand. Vello/Blitz's parley font system dereferences a NULL+offset
+        // pointer (far=0x10) in skrifa::metrics::Metrics::new due to a
+        // musl/kei incompatibility in fontique's font collection init.
+        #[cfg(target_arch = "aarch64")]
+        if address < ostd::mm::PAGE_SIZE {
             let map_addr = address & !(ostd::mm::PAGE_SIZE - 1);
             use crate::vm::{perms::VmPerms, vmar::VmarMapOffset};
             match self
