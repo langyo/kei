@@ -433,7 +433,18 @@ fn clone_child_task(
     #[cfg(target_arch = "x86_64")]
     let (child_fs_base, child_gs_base) = clone_tls_regs(thread_local, clone_flags, clone_args.tls);
     #[cfg(not(target_arch = "x86_64"))]
-    clone_tls_pointer(child_user_ctx.as_mut(), clone_flags, clone_args.tls);
+    {
+        clone_tls_pointer(child_user_ctx.as_mut(), clone_flags, clone_args.tls);
+        #[cfg(target_arch = "aarch64")]
+        {
+            let child_tls = child_user_ctx.as_ref().tls_pointer();
+            let has_settls = clone_flags.contains(CloneFlags::CLONE_SETTLS);
+            ostd::early_println!(
+                "[clone] TLS settls={} child={:#x} parent={:#x}",
+                has_settls, child_tls, ostd::arch::read_tpidr_el0()
+            );
+        }
+    }
 
     // Inherit sigmask from current thread
     let sig_mask = posix_thread.sig_mask().into();
