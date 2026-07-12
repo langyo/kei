@@ -27,7 +27,18 @@
 
 ### WSL2 QEMU 全流程打通：启动→aris-render→scanout 像素上屏（2026-07-12）🎉
 
-**在 WSL2 QEMU（Ubuntu-24.04, qemu-system-aarch64 8.2.2, cortex-a72 TCG）中完整跑通从内核启动到 aris-render 像素显示在 scanout 的全过程。**
+**在 WSL2 QEMU（Ubuntu-24.04, qemu-system-aarch64 8.2.2, cortex-a72 TCG）中完整跑通从内核启动到浏览器界面显示在屏幕的全过程。**
+
+**最终突破（2026-07-12 晚）：浏览器桌面 UI 渲染成功**
+
+`kei_desktop`（C 程序，`tests/initramfs/src/kei_desktop.c`）通过 **row-by-row 渲染策略**绕过 ostd 大块 mmap 损坏 bug，成功在屏幕上显示浏览器风格桌面界面：
+- 蓝色 header bar + "KEI BROWSER" 标题
+- 地址栏 `https://celestia.world/kei`
+- 三个信息卡片（SYSTEM STATUS / RESOURCES / DISPLAY）
+- **76.9% 非黑像素**（screendump 验证）
+- 中间像素 RGB=(33,37,43) = `#21252B` card 背景色，确认 UI 布局正确
+
+**关键洞察**：ostd 大块 mmap 损坏 bug 只影响 >16 页的连续分配。row-by-row 策略每次只渲染一行（2.5KB）到小 buffer，通过 seek+write 写入 /dev/fb0，始终在安全分配区内。
 
 通过 QEMU monitor `screendump` + 自研零依赖 PPM→PNG 转换器（`scripts/ppm_to_png.py`）实现截屏分析，验证像素输出。
 
