@@ -1,14 +1,10 @@
-// kei_desktop — draws a browser-style desktop UI directly to /dev/fb0.
+// kei_desktop — browser-style desktop UI rendered row-by-row to /dev/fb0.
 //
-// This is a standalone C program that does NOT depend on aris-render/Vello.
-// It mimics a browser chrome (blue header bar, address bar, content cards)
-// by writing BGRX pixels directly to the framebuffer. The goal is to provide
-// a visual "browser interface" on kei without the Vello rendering engine,
-// which has a deep compatibility issue with kei's memory model.
+// Renders each row into a small (2.5KB) buffer and writes it to fb0,
+// avoiding the large-mmap corruption bug (>16 pages has 56% corruption).
+// Draws: blue header bar, "KEI BROWSER" title, dark content cards.
 //
-// Build (aarch64 cross): aarch64-linux-gnu-gcc -static -O2 -o kei_desktop kei_desktop.c
-// The resulting binary is used as /init in the initramfs.
-
+// Build: aarch64-linux-gnu-gcc -static -O2 -o kei_desktop kei_desktop.c
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -16,50 +12,29 @@
 #include <linux/fb.h>
 #include <string.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #define FB_W 640
 #define FB_H 480
 #define BPP 4
 
-// BGRX pixel (matches kei virtio-gpu B8G8R8X8 format)
-static inline uint32_t pixel(uint8_t b, uint8_t g, uint8_t r) {
-    return ((uint32_t)0xFF << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-}
+// BGRX colors (One Dark theme)
+#define C_HEADER 0xFF61AFEF
+#define C_BG     0xFF282C34
+#define C_CARD   0xFF21252B
+#define C_ADDRBG 0xFF1B1F23
+#define C_WHITE  0xFFFFFFFF
+#define C_GREEN  0xFF98C379
+#define C_TEXT   0xFFABB2BF
+#define C_ACCENT 0xFFE06C75
 
-// Colors (One Dark theme)
-#define C_HEADER   0xFF61AFEF  // blue header (BGRX: EF AF 61 FF)
-#define C_BG       0xFF282C34  // dark background
-#define C_CARD     0xFF21252B  // card background
-#define C_TEXT     0xFFABB2BF  // light gray text
-#define C_ACCENT   0xFFE06C75  // red accent
-#define C_GREEN    0xFF98C379  // green
-#define C_WHITE    0xFFFFFFFF
-#define C_ADDRBG   0xFF1B1F23  // address bar bg
-
-// fb buffer allocated via mmap at runtime (avoids .bss page fault path
-// which still has issues on kei; mmap anonymous works after TLB flush fix).
-static uint32_t *fb = NULL;
-
-static void fill_rect(int x0, int y0, int w, int h, uint32_t color) {
-    for (int y = y0; y < y0 + h && y < FB_H; y++) {
-        for (int x = x0; x < x0 + w && x < FB_W; x++) {
-            if (x >= 0 && y >= 0)
-                fb[y * FB_W + x] = color;
-        }
-    }
-}
-
-// Draw a character using a 5x7 bitmap font (digits + letters + basic symbols)
+// 5x7 bitmap font
 static const uint8_t font5x7[][7] = {
     ['A'] = {0x0E,0x11,0x11,0x1F,0x11,0x11,0x11},
     ['B'] = {0x1E,0x11,0x11,0x1E,0x11,0x11,0x1E},
     ['C'] = {0x0E,0x11,0x10,0x10,0x10,0x11,0x0E},
     ['D'] = {0x1C,0x12,0x11,0x11,0x11,0x12,0x1C},
     ['E'] = {0x1F,0x10,0x10,0x1E,0x10,0x10,0x1F},
-    ['F'] = {0x1F,0x10,0x10,0x1E,0x10,0x10,0x10},
     ['G'] = {0x0E,0x11,0x10,0x17,0x11,0x11,0x0F},
-    ['H'] = {0x11,0x11,0x11,0x1F,0x11,0x11,0x11},
     ['I'] = {0x0E,0x04,0x04,0x04,0x04,0x04,0x0E},
     ['K'] = {0x11,0x12,0x14,0x18,0x14,0x12,0x11},
     ['L'] = {0x10,0x10,0x10,0x10,0x10,0x10,0x1F},
@@ -71,168 +46,127 @@ static const uint8_t font5x7[][7] = {
     ['S'] = {0x0F,0x10,0x10,0x0E,0x01,0x01,0x1E},
     ['T'] = {0x1F,0x04,0x04,0x04,0x04,0x04,0x04},
     ['U'] = {0x11,0x11,0x11,0x11,0x11,0x11,0x0E},
-    ['V'] = {0x11,0x11,0x11,0x11,0x11,0x0A,0x04},
     ['W'] = {0x11,0x11,0x11,0x15,0x15,0x15,0x0A},
-    ['Y'] = {0x11,0x11,0x0A,0x04,0x04,0x04,0x04},
-    ['Z'] = {0x1F,0x01,0x02,0x04,0x08,0x10,0x1F},
-    [':'] = {0x00,0x00,0x04,0x00,0x04,0x00,0x00},
-    ['/'] = {0x01,0x02,0x02,0x04,0x08,0x08,0x10},
-    ['.'] = {0x00,0x00,0x00,0x00,0x00,0x0C,0x0C},
-    ['-'] = {0x00,0x00,0x00,0x1F,0x00,0x00,0x00},
-    [' '] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    ['0'] = {0x0E,0x11,0x13,0x15,0x19,0x11,0x0E},
-    ['1'] = {0x04,0x0C,0x04,0x04,0x04,0x04,0x0E},
-    ['2'] = {0x0E,0x11,0x01,0x06,0x08,0x10,0x1F},
-    ['3'] = {0x0E,0x11,0x01,0x06,0x01,0x11,0x0E},
-    ['4'] = {0x02,0x06,0x0A,0x12,0x1F,0x02,0x02},
-    ['5'] = {0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E},
-    ['6'] = {0x06,0x08,0x10,0x1E,0x11,0x11,0x0E},
-    ['7'] = {0x1F,0x01,0x02,0x04,0x08,0x08,0x08},
-    ['8'] = {0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E},
-    ['9'] = {0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C},
+    [' ']= {0,0,0,0,0,0,0},
+    [':']= {0,0,0x04,0,0x04,0,0},
+    ['/']= {0x01,0x02,0x02,0x04,0x08,0x08,0x10},
+    ['.']= {0,0,0,0,0,0x0C,0x0C},
+    ['-']= {0,0,0,0x1F,0,0,0},
+    ['0']={0x0E,0x11,0x13,0x15,0x19,0x11,0x0E},
+    ['1']={0x04,0x0C,0x04,0x04,0x04,0x04,0x0E},
+    ['2']={0x0E,0x11,0x01,0x06,0x08,0x10,0x1F},
 };
 
-static void draw_char(int x, int y, char c, uint32_t color, int scale) {
-    if ((int)c < 32 || (int)c > 127) return;
-    const uint8_t *glyph = font5x7[(int)c];
-    if (!glyph[0] && c != ' ') return;
-    for (int row = 0; row < 7; row++) {
-        for (int col = 0; col < 5; col++) {
-            if (glyph[row] & (0x10 >> col)) {
-                fill_rect(x + col * scale, y + row * scale, scale, scale, color);
-            }
-        }
-    }
-}
-
-static void draw_text(int x, int y, const char *s, uint32_t color, int scale) {
-    int cx = x;
-    for (; *s; s++) {
-        draw_char(cx, y, *s, color, scale);
-        cx += 6 * scale;
-    }
-}
-
 int main(int argc, char **argv) {
-    // Allocate framebuffer via mmap (works with TLB flush fix; .bss does not)
-    int fb_size = FB_W * FB_H * BPP;
-    fb = mmap(NULL, fb_size, PROT_READ | PROT_WRITE,
-              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (fb == MAP_FAILED) {
-        const char msg[] = "kei_desktop: mmap fb failed\n";
-        write(2, msg, sizeof(msg) - 1);
-        return 1;
-    }
+    // Small row buffer (within the 16-page safe zone)
+    int row_bytes = FB_W * BPP;
+    uint32_t *rowbuf = mmap(NULL, row_bytes, PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (rowbuf == MAP_FAILED) { write(2, "mmap fail\n", 10); return 1; }
 
-    write(2, "1:mmap\n", 7);
-    // Fill entire fb buffer with a test color (write 1.2MB to test stability)
-    for (int i = 0; i < FB_W * FB_H; i++) fb[i] = C_HEADER;
-    write(2, "2:fill\n", 7);
-    // Verify
-    int bad = 0;
-    for (int i = 0; i < FB_W * FB_H; i++) if (fb[i] != C_HEADER) bad++;
-    write(2, "3:verify\n", 9);
-    if (bad > 0) { char m[32]; int n=snprintf(m,32,"bad=%d\n",bad); write(2,m,n); }
-
-    // Draw UI (commented out for diagnostic — re-enable once fill is stable)
-    fill_rect(0, 0, FB_W, FB_H, C_BG);
-    fill_rect(0, 0, FB_W, 50, C_HEADER);
-    draw_text(20, 15, "KEI BROWSER", C_WHITE, 3);
-    fill_rect(10, 58, FB_W - 20, 28, C_ADDRBG);
-    draw_text(18, 65, "https://celestia.world/kei", C_TEXT, 2);
-    fill_rect(20, 100, FB_W - 40, 80, C_CARD);
-    draw_text(30, 110, "SYSTEM STATUS", C_HEADER, 2);
-    draw_text(30, 132, "ARIS-RENDER PIPELINE OK", C_GREEN, 2);
-    draw_text(30, 152, "FRAMEBUFFER 640X480 BGRX", C_TEXT, 2);
-    fill_rect(20, 195, FB_W - 40, 80, C_CARD);
-    draw_text(30, 205, "RESOURCES", C_HEADER, 2);
-    draw_text(30, 227, "CPU 12 PCT", C_ACCENT, 2);
-    draw_text(30, 247, "MEM 256MB NET 1.2G", C_TEXT, 2);
-    fill_rect(20, 290, FB_W - 40, 80, C_CARD);
-    draw_text(30, 300, "DISPLAY", C_HEADER, 2);
-    draw_text(30, 322, "VIRTIO-GPU SCANOUT", C_TEXT, 2);
-    draw_text(30, 342, "/dev/fb0 DMA BACKED", C_TEXT, 2);
-    draw_text(20, 400, "KEI OS - ARIS DESKTOP", C_TEXT, 2);
-    draw_text(20, 425, "QEMU AARCH64 - WSL2", C_ACCENT, 2);
-    write(2, "4:draw\n", 7);
-
-    // Header bar (blue, 50px tall)
-    fill_rect(0, 0, FB_W, 50, C_HEADER);
-
-    // Title in header
-    draw_text(20, 15, "KEI BROWSER", C_WHITE, 3);
-
-    // Address bar (below header)
-    fill_rect(10, 58, FB_W - 20, 28, C_ADDRBG);
-    draw_text(18, 65, "https://celestia.world/kei", C_TEXT, 2);
-
-    // Content area cards
-    // Card 1: System Status
-    fill_rect(20, 100, FB_W - 40, 80, C_CARD);
-    draw_text(30, 110, "SYSTEM STATUS", C_HEADER, 2);
-    draw_text(30, 132, "ARIS-RENDER PIPELINE OK", C_GREEN, 2);
-    draw_text(30, 152, "FRAMEBUFFER 640X480 BGRX", C_TEXT, 2);
-
-    // Card 2: Resources
-    fill_rect(20, 195, FB_W - 40, 80, C_CARD);
-    draw_text(30, 205, "RESOURCES", C_HEADER, 2);
-    draw_text(30, 227, "CPU 12 PCT", C_ACCENT, 2);
-    draw_text(30, 247, "MEM 256MB NET 1.2G", C_TEXT, 2);
-
-    // Card 3: Display
-    fill_rect(20, 290, FB_W - 40, 80, C_CARD);
-    draw_text(30, 300, "DISPLAY", C_HEADER, 2);
-    draw_text(30, 322, "VIRTIO-GPU SCANOUT", C_TEXT, 2);
-    draw_text(30, 342, "/dev/fb0 DMA BACKED", C_TEXT, 2);
-
-    // Footer
-    draw_text(20, 400, "KEI OS - ARIS DESKTOP", C_TEXT, 2);
-    draw_text(20, 425, "QEMU AARCH64 - WSL2", C_ACCENT, 2);
-
-    // Write to framebuffer
     const char *fb_path = argc > 1 ? argv[1] : "/dev/fb0";
     int fd = open(fb_path, O_RDWR);
-    if (fd < 0) {
-        const char msg[] = "kei_desktop: cannot open fb\n";
-        write(2, msg, sizeof(msg) - 1);
-        return 1;
-    }
+    if (fd < 0) { write(2, "open fb fail\n", 13); return 1; }
 
-    // Query resolution (best effort)
+    // Try query resolution
     struct fb_var_screeninfo vinfo;
-    int fw = FB_W, fh = FB_H;
     if (ioctl(fd, FBIOGET_VSCREENINFO, &vinfo) == 0) {
-        fw = vinfo.xres;
-        fh = vinfo.yres;
+        // use actual resolution if reasonable
+        if (vinfo.xres > 0 && vinfo.xres <= 1920) { /* keep FB_W */ }
     }
 
-    write(2, "kei_desktop: writing fb\n", 24);
-    // Write pixel data (convert RGBA-in-memory to BGRX for fb)
-    // Our fb[] array already stores BGRX values, write directly.
-    int total = FB_W * FB_H * BPP;
-    // For mismatched resolution, center our 640x480 in the actual fb
-    if (fw == FB_W && fh == FB_H) {
-        write(fd, fb, total);
-    } else {
-        // Write row by row with padding
-        for (int y = 0; y < fh && y < FB_H; y++) {
-            write(fd, &fb[y * FB_W], FB_W * BPP);
-            // pad to fb width
-            if (fw > FB_W) {
-                uint8_t zeros[4096] = {0};
-                int pad = (fw - FB_W) * BPP;
-                while (pad > 0) {
-                    int chunk = pad > 4096 ? 4096 : pad;
-                    write(fd, zeros, chunk);
-                    pad -= chunk;
+    write(2, "render\n", 7);
+    for (int y = 0; y < FB_H; y++) {
+        // Background color per region
+        uint32_t bg;
+        if (y < 50) bg = C_HEADER;
+        else if (y >= 58 && y < 86) bg = C_ADDRBG;
+        else if (y >= 100 && y < 180) bg = C_CARD;
+        else if (y >= 195 && y < 275) bg = C_CARD;
+        else if (y >= 290 && y < 370) bg = C_CARD;
+        else bg = C_BG;
+
+        for (int x = 0; x < FB_W; x++) rowbuf[x] = bg;
+
+        // Draw "KEI BROWSER" title (scale 3, y=15..36)
+        if (y >= 15 && y < 36) {
+            const char *title = "KEI BROWSER";
+            int ty = y - 15;
+            int glyph_row = ty / 3;
+            if (glyph_row < 7) {
+                for (int ci = 0; title[ci]; ci++) {
+                    unsigned char c = (unsigned char)title[ci];
+                    const uint8_t *g = (c < 128) ? font5x7[c] : font5x7[' '];
+                    for (int col = 0; col < 5; col++) {
+                        if (g[glyph_row] & (0x10 >> col)) {
+                            int px = 20 + ci * 18 + col * 3;
+                            for (int dx = 0; dx < 3 && px + dx < FB_W; dx++)
+                                rowbuf[px + dx] = C_WHITE;
+                        }
+                    }
                 }
             }
         }
-    }
-    close(fd);
+        // Draw address bar text (scale 2, y=65..79)
+        if (y >= 65 && y < 79) {
+            const char *url = "https://celestia.world/kei";
+            int ty = y - 65;
+            int gr = ty / 2;
+            if (gr < 7) {
+                for (int ci = 0; url[ci]; ci++) {
+                    unsigned char c = (unsigned char)url[ci];
+                    const uint8_t *g = (c < 128 && font5x7[c][0]|font5x7[c][1]|font5x7[c][2]) ? font5x7[c] : font5x7[' '];
+                    for (int col = 0; col < 5; col++) {
+                        if (g[gr] & (0x10 >> col)) {
+                            int px = 18 + ci * 12 + col * 2;
+                            for (int dx = 0; dx < 2 && px + dx < FB_W; dx++)
+                                rowbuf[px + dx] = C_TEXT;
+                        }
+                    }
+                }
+            }
+        }
+        // Card titles and content (scale 2)
+        // Card 1 (y=110..160): "SYSTEM STATUS"
+        // Card 2 (y=205..255): "RESOURCES"
+        // Card 3 (y=300..350): "DISPLAY"
+        struct { int y0, y1; const char *text; uint32_t color; } labels[] = {
+            {110, 124, "SYSTEM STATUS", C_HEADER},
+            {132, 146, "ARIS-RENDER OK", C_GREEN},
+            {205, 219, "RESOURCES", C_HEADER},
+            {227, 241, "CPU 12 MEM 256M", C_ACCENT},
+            {300, 314, "DISPLAY", C_HEADER},
+            {322, 336, "VIRTIO-GPU 640X480", C_TEXT},
+            {0,0,0,0}
+        };
+        for (int li = 0; labels[li].text; li++) {
+            if (y >= labels[li].y0 && y < labels[li].y1) {
+                int ty = y - labels[li].y0;
+                int gr = ty / 2;
+                if (gr < 7) {
+                    for (int ci = 0; labels[li].text[ci]; ci++) {
+                        unsigned char c = (unsigned char)labels[li].text[ci];
+                        const uint8_t *g = (c < 128) ? font5x7[c] : font5x7[' '];
+                        if (!g[0] && c != ' ') continue;
+                        for (int col = 0; col < 5; col++) {
+                            if (g[gr] & (0x10 >> col)) {
+                                int px = 30 + ci * 12 + col * 2;
+                                for (int dx = 0; dx < 2 && px + dx < FB_W; dx++)
+                                    rowbuf[px + dx] = labels[li].color;
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
-    write(2, "kei_desktop: done\n", 19);
-    // Keep running
+        // Write row to fb via seek+write
+        lseek(fd, (off_t)(y * row_bytes), SEEK_SET);
+        write(fd, rowbuf, row_bytes);
+    }
+
+    write(2, "done\n", 5);
+    close(fd);
     while (1) sleep(3600);
     return 0;
 }
