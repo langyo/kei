@@ -8,12 +8,10 @@ impl Vmar {
         let address = page_fault_info.address;
 
         // WORKAROUND: Map a zeroed page at the NULL region (0x0-0x1000) on
-        // demand. Vello/Blitz rendering dereferences a NULL+offset pointer
-        // (far=0x10) due to a musl/kei incompatibility. Mapping a zero page
-        // lets the NULL read return 0 instead of crashing with SIGSEGV,
-        // allowing the render pipeline to continue.
-        #[cfg(target_arch = "aarch64")]
-        if address < ostd::mm::PAGE_SIZE {
+        // demand. DISABLED for debugging — let the crash happen to get a
+        // backtrace from the trap handler.
+        // #[cfg(target_arch = "aarch64")]
+        if false && address < ostd::mm::PAGE_SIZE {
             let map_addr = address & !(ostd::mm::PAGE_SIZE - 1);
             use crate::vm::{perms::VmPerms, vmar::VmarMapOffset};
             match self

@@ -304,6 +304,28 @@ fn handle_user_page_fault(f: &mut TrapFrame, exception: &CpuException) {
         sp_el0,
     );
 
+    // Walk the user stack frames (x29 = frame pointer chain) to get a backtrace.
+    let mut fp = f.general.x29;
+    crate::early_println!("[trap] user backtrace:");
+    crate::early_println!("[trap]   #0 {:#x} (faulting PC)", f.elr_el1);
+    crate::early_println!("[trap]   #1 {:#x} (return addr)", f.general.x30);
+    for i in 2..15 {
+        if fp == 0 || fp > 0x800000000000 {
+            break;
+        }
+        // aarch64 frame: [saved_fp, saved_lr]
+        let saved_fp = unsafe { core::ptr::read_volatile(fp as *const usize) };
+        let saved_lr = unsafe { core::ptr::read_volatile((fp + 8) as *const usize) };
+        if saved_lr == 0 || saved_lr > 0x800000000000 {
+            break;
+        }
+        crate::early_println!("[trap]   #{} {:#x}", i, saved_lr);
+        if saved_fp <= fp {
+            break; // prevent infinite loop
+        }
+        fp = saved_fp;
+    }
+
     // For user-mode faults that can't be handled inline: return from run_user
     // so UserContext::execute can deliver a signal.
     let ctx_ptr = trap::CURRENT_USER_CTX.load();
