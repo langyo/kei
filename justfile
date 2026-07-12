@@ -376,6 +376,55 @@ _run-loongarch64:
     echo ""
     cargo osdk run --scheme loongarch --target-arch loongarch64
 
+# ── WSL2 QEMU (headless, screenshot-driven) ────────────────
+#
+# Run kei in WSL2's qemu-system-aarch64 in headless mode and capture
+# the display via QEMU monitor screendump. This is the primary path
+# for automated CI and screenshot analysis on Windows hosts, since
+# WSL2 QEMU avoids the SDL/GUI overhead and the CJK-path-in-WSL blocker
+# is sidestepped via the ~/celestia/kei ASCII symlink.
+#
+# Recipes use the `wslq-` prefix to avoid colliding with the shared
+# `wsl-run` recipe in celestia-devtools.just.
+#
+# Usage:
+#   just wslq-run               # run aarch64 headless (100s)
+#   just wslq-run 60            # run for 60 seconds
+#   just wslq-ui                # run with aris-render kei_ui initramfs
+#   just wslq-screenshot        # convert last screendump to PNG
+
+# Run kei aarch64 in WSL2 QEMU headless. Optional SECS (default 100).
+# Uses INITRAMFS env var to select the initramfs (default: render_new).
+[script('bash')]
+wslq-run SECS="100":
+    set -e
+    export INITRAMFS="${INITRAMFS:-tests/initramfs/build/initramfs_render_new.cpio.gz}"
+    wsl -d Ubuntu-24.04 -e bash -lc 'bash ~/celestia/kei/scripts/wsl_qemu_aarch64.sh {{SECS}}'
+
+# Run kei with the kei_ui (aris-render browser UI) initramfs.
+[script('bash')]
+wslq-ui SECS="110":
+    set -e
+    export INITRAMFS="tests/initramfs/build/initramfs_kei_ui.cpio.gz"
+    wsl -d Ubuntu-24.04 -e bash -lc 'bash ~/celestia/kei/scripts/wsl_qemu_aarch64.sh {{SECS}}'
+
+# Build a render initramfs (kei_ui or kei_fbtest).
+[script('bash')]
+wslq-initramfs BIN="kei_ui":
+    {{python_cmd}} scripts/build_render_initramfs.py {{BIN}}
+
+# Convert the last WSL2 screendump to PNG and show pixel stats.
+[script('bash')]
+wslq-screenshot:
+    set -e
+    wsl -d Ubuntu-24.04 -e bash -lc 'cd ~/celestia/kei && python3 scripts/ppm_to_png.py target/wsl_screendump.ppm target/wsl_screendump.png'
+    @ls -la target/wsl_screendump.png 2>/dev/null || echo "[wslq-screenshot] no screendump yet"
+
+# Ensure the ~/celestia/kei ASCII symlink exists (bypasses CJK-path blocker).
+[script('bash')]
+wslq-setup:
+    wsl -d Ubuntu-24.04 -e bash -lc 'mkdir -p ~/celestia && ln -sfn "/mnt/d/源代码/工程项目/celestia/kei" ~/celestia/kei && echo "symlink OK: ~/celestia/kei"'
+
 # ── Screenshot ──────────────────────────────────────────────
 #
 # Capture the QEMU display to a PNG file via the QEMU monitor's
