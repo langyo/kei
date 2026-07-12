@@ -25,6 +25,34 @@
 
 ## 4. 近期进展
 
+### WSL2 QEMU 全流程打通：启动→aris-render→scanout 像素上屏（2026-07-12）🎉
+
+**在 WSL2 QEMU（Ubuntu-24.04, qemu-system-aarch64 8.2.2, cortex-a72 TCG）中完整跑通从内核启动到 aris-render 像素显示在 scanout 的全过程。**
+
+通过 QEMU monitor `screendump` + 自研零依赖 PPM→PNG 转换器（`scripts/ppm_to_png.py`）实现截屏分析，验证像素输出。
+
+**修复的两个核心 bug**：
+
+1. **fb write EL1 page fault**（`kernel/src/device/fb.rs`）：IoMem 的 KVirtArea 映射在重复 `write()` syscall 后触发 EL1 data abort（ESR=0x96000041, FAR=0xffffdfffffc81128）。修复：Blit 后端绕过 IoMem，直接用 `BlitBackend` 的固定 PA 线性映射（`LINEAR_BASE + 0x60000000`，PLAN.md 验证稳定）通过 `write_bytes_at` 写入。
+
+2. **scanout 不刷新**（`kernel/comps/virtio/src/aarch64_raw_gpu_probe.rs`）：`raw_flush_callback` 是 no-op，用户态写入 DMA buffer 后像素不显示。修复：flush callback 每 32 次调用执行一次 `flush_framebuffer()`（TRANSFER_TO_HOST_2D + RESOURCE_FLUSH），节流避免 QEMU TCG 命令队列溢出。fb `write_at` 末尾调用 `framebuffer.flush_all()`。
+
+**验证证据**：
+- kei_fbtest 蓝色测试图：screendump **70.6% 非黑像素**（之前 37.7% 仅 boot 测试图）
+- 首像素 RGB=(97,175,239) = `#61AFEF`，与 kei_fbtest 写入的蓝色 header 一致
+- 无 OOPS/page fault（之前每次 ~28s 后崩溃）
+
+**新工具链**：
+- `scripts/wsl_qemu_aarch64.sh`：WSL2 headless QEMU 启动器 + screendump
+- `scripts/ppm_to_png.py`：零依赖 PPM→PNG 转换器（含像素统计）
+- `scripts/build_render_initramfs.py`：构建含 kei_ui/kei_fbtest 的 initramfs
+- justfile `wslq-*` recipes：`wslq-run`/`wslq-ui`/`wslq-screenshot`/`wslq-setup`
+
+**已知限制**：
+1. **kei_ui（完整 Blitz+Vello 浏览器 UI）在 musl runtime init 阶段 NULL deref**：`address=0x0`，RT_SIGACTION 之后。qemu-user-static 下正常，说明是 kei 内核 ELF TLS/auxv 兼容问题（疑似匿名 mmap 页未清零或 TLS 块内容损坏）。kei_fbtest 因不重 TLS 可正常运行。修复需深入调试 ostd ELF loader + demand-paging 清零逻辑。
+2. **x86_64 编译有 9 个 acpi crate 错误**（E0432/E0433/E0277）：`acpi::madt`/`AcpiHandler` 等 API 在 acpi 6.1.1 变更，kei fork 未适配。预先存在的 regression，非本次引入。
+3. **WSL2 仅装了 qemu-system-arm**（aarch64），x86_64/riscv64 的 system emulator 需 `apt install qemu-system-x86 qemu-system-misc`（需 sudo 密码）。Windows QEMU 有全部架构。
+
 ### virtio-gpu 黑屏根因修正 + 双初始化修复（2026-07-10 → 07-11 修正）🐛
 
 **修正了长期被误判为「QEMU TCG used-ring bug」的黑屏根因。**
