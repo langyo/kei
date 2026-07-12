@@ -535,6 +535,17 @@ impl VmMapping {
             MappedMemory::Anonymous => {
                 // Anonymous mapping. Allocate a new frame.
                 let frame: UFrame = FrameAllocOptions::new().alloc_frame()?.into();
+                // DIAGNOSTIC: log PA of first 40 allocations to detect duplicates.
+                use core::sync::atomic::{AtomicUsize, Ordering};
+                use ostd::mm::HasPaddr;
+                static ANON_ALLOC_COUNT: AtomicUsize = AtomicUsize::new(0);
+                let n = ANON_ALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
+                if n < 40 {
+                    ostd::early_println!(
+                        "[anon-alloc] #{} va={:#x} pa={:#x}",
+                        n, page_aligned_addr, frame.paddr()
+                    );
+                }
                 return Ok((frame, is_readonly));
             }
             MappedMemory::Device => {
