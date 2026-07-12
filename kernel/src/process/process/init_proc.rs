@@ -42,9 +42,6 @@ pub fn spawn_init_process(
         envp.push(CString::new(RAYON_VAR).unwrap());
     }
 
-    // Skip Blitz DOM creation on kei (fontique/skrifa NULL deref workaround).
-    envp.push(CString::new("KEI_NO_DOM=1").unwrap());
-
     let process = if let Some(executable_path) = executable_path {
         create_init_process(
             executable_path,
