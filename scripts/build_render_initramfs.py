@@ -38,6 +38,11 @@ echo "Done. Keeping system alive."
 while true; do sleep 10; done
 """
 
+# When DIRECT_INIT is set, /init is a copy of the render binary itself (not a
+# shell script). This avoids depending on busybox/sh, which can crash on kei
+# due to TLS/musl-runtime issues. The kernel execve's /init directly.
+DIRECT_INIT = True
+
 
 def main():
     bin_name = sys.argv[1] if len(sys.argv) > 1 else "kei_ui"
@@ -57,15 +62,23 @@ def main():
         for d in ("bin", "dev", "proc", "sys", "tmp", "root", "etc"):
             os.makedirs(os.path.join(rootfs, d), exist_ok=True)
 
-        # init script
+        # init: either the render binary directly (DIRECT_INIT) or a shell script.
+        # Direct init avoids the busybox/sh dependency, which crashes on kei
+        # due to musl runtime TLS issues with the larger busybox binary.
         init_path = os.path.join(rootfs, "init")
-        with open(init_path, "w", newline="\n") as f:
-            f.write(INIT_TEMPLATE.format(bin_name=bin_name))
-        os.chmod(init_path, 0o755)
+        if DIRECT_INIT:
+            # /init IS the render binary — kernel execve's it directly.
+            shutil.copy2(bin_path, init_path)
+            os.chmod(init_path, 0o755)
+            print(f"[initramfs] DIRECT_INIT: /init = {bin_name} ELF")
+        else:
+            with open(init_path, "w", newline="\n") as f:
+                f.write(INIT_TEMPLATE.format(bin_name=bin_name))
+            os.chmod(init_path, 0o755)
 
-        # The render binary
-        shutil.copy2(bin_path, os.path.join(rootfs, bin_name))
-        os.chmod(os.path.join(rootfs, bin_name), 0o755)
+            # The render binary (only needed when init is a script)
+            shutil.copy2(bin_path, os.path.join(rootfs, bin_name))
+            os.chmod(os.path.join(rootfs, bin_name), 0o755)
 
         # busybox + applet symlinks
         if os.path.exists(BUSYBOX):

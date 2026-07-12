@@ -354,6 +354,14 @@ fn map_segment_vmos(
         let map_at = relocated_range
             .relocated_addr_of(loadable_phdr.virt_range().start)
             .expect("`calc_total_vaddr_bounds()` should cover all segments");
+        ostd::early_println!(
+            "[elf] seg vaddr={:#x}-{:#x} map_at={:#x} filesz={} flags={:?}",
+            loadable_phdr.virt_range().start,
+            loadable_phdr.virt_range().end,
+            map_at,
+            loadable_phdr.file_range().len(),
+            loadable_phdr.vm_perms()
+        );
         map_segment_vmo(loadable_phdr, elf_file, vmar, map_at)?;
     }
 
