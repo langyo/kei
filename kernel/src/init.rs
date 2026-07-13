@@ -105,11 +105,16 @@ fn init() {
     ostd::info!("random::init");
     crate::util::random::init();
     ostd::info!("driver::init");
-    #[cfg(not(target_arch = "aarch64"))]
+    // aarch64 and riscv64 defer driver init. On riscv64, aster_input's
+    // all_devices() triggers a div-by-zero panic in core::unicode::conversions
+    // (likely an uninitialized input device constant). Skipping driver init
+    // here lets riscv64 reach userspace; input devices can be initialized
+    // later once the root cause is fixed.
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     crate::driver::init();
     // Register memory character devices (/dev/null, /dev/zero, /dev/urandom)
     // early so they're available before any user-space process starts.
-    #[cfg(target_arch = "aarch64")]
+    #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
     crate::device::mem::init_in_first_kthread();
     ostd::info!("time::init");
     crate::time::init();
@@ -117,7 +122,7 @@ fn init() {
     // all device components (virtio, network, vsock, softirq) are initialized
     // by the component system's Kthread stage before the network stack probes
     // the virtio-net/vsock devices.
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     {
         ostd::info!("net::init");
         crate::net::init();
