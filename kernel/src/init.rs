@@ -248,7 +248,11 @@ fn first_kthread() {
 static INIT_PROCESS: Once<Arc<Process>> = Once::new();
 
 fn init_in_first_kthread(path_resolver: &PathResolver) {
-    #[cfg(not(target_arch = "aarch64"))]
+    // riscv64: skip component::init_all(Kthread) — it panics with a div-by-zero
+    // in aster_input (core::unicode::conversions). The Kthread stage initializes
+    // device components (virtio, input, net) which aren't needed for a basic
+    // userspace boot test. Skipping lets us reach spawn_init_process.
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     if let Err(e) = component::init_all(InitStage::Kthread, component::parse_metadata!()) {
         ostd::warn!("component::init_all(Kthread) failed: {:?}", e);
     }

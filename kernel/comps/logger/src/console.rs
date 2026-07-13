@@ -13,10 +13,21 @@ use ostd::sync::{LocalIrqDisabled, SpinLockGuard};
 
 /// Prints the formatted arguments to the standard output.
 pub fn _print(args: fmt::Arguments) {
+    // riscv64: core::unicode::conversions triggers a div-by-zero panic during
+    // format_args write_fmt (a rustc/core bug on riscv64 where a casemapping
+    // table constant evaluates to 0). Always use early_print (raw serial,
+    // no unicode lookup) on riscv64 to avoid this.
+    #[cfg(target_arch = "riscv64")]
+    {
+        ostd::console::early_print(args);
+        return;
+    }
+
     // If the console component hasn't been initialized yet (e.g., during
     // early aarch64 boot), fall back to early_print (raw serial output).
     // This prevents panics when info!/println! are called before the
     // component system is set up.
+    #[cfg(not(target_arch = "riscv64"))]
     let Some(component) = aster_console::component() else {
         ostd::console::early_print(args);
         return;
@@ -24,25 +35,28 @@ pub fn _print(args: fmt::Arguments) {
 
     // We must call lock on the component's device table to prevent
     // interleaving and avoid clone-related deadbacks under low memory.
-    let devices = component.console_device_table.lock();
+    #[cfg(not(target_arch = "riscv64"))]
+    {
+        let devices = component.console_device_table.lock();
 
-    struct Printer<'a>(
-        SpinLockGuard<'a, BTreeMap<String, Arc<dyn AnyConsoleDevice>>, LocalIrqDisabled>,
-    );
-    impl Write for Printer<'_> {
-        fn write_str(&mut self, s: &str) -> fmt::Result {
-            if self.0.is_empty() {
-                ostd::early_print!("{}", s);
-            } else {
-                for console in self.0.values() {
-                    console.send(s.as_bytes());
+        struct Printer<'a>(
+            SpinLockGuard<'a, BTreeMap<String, Arc<dyn AnyConsoleDevice>>, LocalIrqDisabled>,
+        );
+        impl Write for Printer<'_> {
+            fn write_str(&mut self, s: &str) -> fmt::Result {
+                if self.0.is_empty() {
+                    ostd::early_print!("{}", s);
+                } else {
+                    for console in self.0.values() {
+                        console.send(s.as_bytes());
+                    }
                 }
+                Ok(())
             }
-            Ok(())
         }
-    }
 
-    Printer(devices).write_fmt(args).unwrap();
+        Printer(devices).write_fmt(args).unwrap();
+    }
 }
 
 /// Copied from Rust std: <https://github.com/rust-lang/rust/blob/master/library/std/src/macros.rs>
