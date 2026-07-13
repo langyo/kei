@@ -2,7 +2,7 @@
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>Núcleo OS Rust para IoT industrial — derivado de Asterinas (星绽), con biblioteca no_std para nodos sensores.</strong></p>
+<p align="center"><strong>Núcleo OS Rust para IoT industrial — derivado de Asterinas, con biblioteca no_std para nodos sensores.</strong></p>
 
 <div align="center">
 
@@ -30,7 +30,7 @@
 
 KEI es un núcleo OS Rust para dispositivos edge ARM64 y RISC-V. También incluye una biblioteca `#![no_std]` para nodos sensores embassy.
 
-KEI deriva de [Asterinas (星绽)](https://github.com/asterinas/asterinas), un framekernel Rust.
+KEI deriva de [Asterinas](https://github.com/asterinas/asterinas), un framekernel Rust.
 
 ## Contenido
 

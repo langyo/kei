@@ -2,7 +2,7 @@
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>Rust OS kernel for industrial IoT gateways — derived from Asterinas (星绽), with an embedded no_std library for sensor nodes.</strong></p>
+<p align="center"><strong>Rust OS kernel for industrial IoT gateways — derived from Asterinas, with an embedded no_std library for sensor nodes.</strong></p>
 
 <div align="center">
 
@@ -31,7 +31,7 @@
 KEI is a Rust OS kernel for ARM64 and RISC-V edge devices. It also ships a
 `#![no_std]` library for embassy sensor nodes.
 
-KEI is derived from [Asterinas (星绽)](https://github.com/asterinas/asterinas),
+KEI is derived from [Asterinas](https://github.com/asterinas/asterinas),
 a Rust framekernel. It adds ARM64 board support, virtio-gpu display, industrial
 drivers, and a sensor-node wire protocol — while staying independent of upstream
 release cycles.

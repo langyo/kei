@@ -2,7 +2,7 @@
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>産業用 IoT 向け Rust OS カーネル — Asterinas（星绽）由来、組み込みセンサーノード向け no_std ライブラリ付き。</strong></p>
+<p align="center"><strong>産業用 IoT 向け Rust OS カーネル — Asterinas 由来、組み込みセンサーノード向け no_std ライブラリ付き。</strong></p>
 
 <div align="center">
 
@@ -30,7 +30,7 @@
 
 KEI は ARM64 および RISC-V エッジデバイス向けの Rust OS カーネルです。embassy センサーノード向けの `#![no_std]` ライブラリも同梱しています。
 
-KEI は [Asterinas（星绽）](https://github.com/asterinas/asterinas) から派生した Rust フレームカーネルです。
+KEI は [Asterinas](https://github.com/asterinas/asterinas) から派生した Rust フレームカーネルです。
 
 ## リポジトリ内容
 

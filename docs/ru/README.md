@@ -2,7 +2,7 @@
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>Ядро ОС на Rust для промышленного IoT — на базе Asterinas (星绽), с no_std библиотекой для сенсорных узлов.</strong></p>
+<p align="center"><strong>Ядро ОС на Rust для промышленного IoT — на базе Asterinas, с no_std библиотекой для сенсорных узлов.</strong></p>
 
 <div align="center">
 
@@ -30,7 +30,7 @@
 
 KEI — ядро ОС на Rust для edge-устройств ARM64 и RISC-V. Включает библиотеку `#![no_std]` для сенсорных узлов embassy.
 
-KEI основан на [Asterinas (星绽)](https://github.com/asterinas/asterinas), фрейм-ядре на Rust.
+KEI основан на [Asterinas](https://github.com/asterinas/asterinas), фрейм-ядре на Rust.
 
 ## Содержимое
 
