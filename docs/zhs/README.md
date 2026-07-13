@@ -2,7 +2,7 @@
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>面向工业物联网的 Rust OS 内核——源自 Asterinas（星绽），附带面向嵌入式传感器节点的 no_std 库。</strong></p>
+<p align="center"><strong>面向工业物联网边缘设备的 Rust OS 内核。</strong></p>
 
 <div align="center">
 
@@ -67,10 +67,6 @@ cd packages/kei
 cargo test --all-features
 cargo run --example host_demo
 ```
-
-## 生态
-
-- **[aris](https://github.com/celestia-island/aris)** — 基于 servo 派生的浏览器引擎
 
 ## 许可证
 

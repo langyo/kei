@@ -2,7 +2,7 @@
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>面向工業物聯網的 Rust OS 核心——源自 Asterinas（星綻），附帶面向嵌入式感測器節點的 no_std 庫。</strong></p>
+<p align="center"><strong>面向工業物聯網邊緣設備的 Rust OS 核心。</strong></p>
 
 <div align="center">
 
@@ -45,10 +45,6 @@ KEI 源自 [Asterinas（星綻）](https://github.com/asterinas/asterinas)，一
 just build        # 構建預設板卡
 just test-all     # QEMU 啟動測試
 ```
-
-## 生態
-
-- **[aris](https://github.com/celestia-island/aris)** — 由 servo 派生的瀏覽器引擎
 
 ## 授權條款
 
