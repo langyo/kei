@@ -28,7 +28,7 @@
 
 ## مقدمة
 
-KEI هو نواة نظام تشغيل بـ Rust لأجهزة الحافة ARM64 و RISC-V. يشغّل وسيط [evernight](https://github.com/celestia-island/evernight) ويوفّر syscall ABI لـ [aris](https://github.com/celestia-island/aris) (محرك المتصفح). يتضمن أيضًا مكتبة `#![no_std]` لعقد المستشعرات embassy.
+KEI هو نواة نظام تشغيل بـ Rust لأجهزة الحافة ARM64 و RISC-V. يتضمن أيضًا مكتبة `#![no_std]` لعقد المستشعرات embassy.
 
 KEI مشتق من [Asterinas (星绽)](https://github.com/asterinas/asterinas)، نواة إطار بـ Rust.
 
@@ -48,9 +48,7 @@ just test-all     # اختبار إقلاع QEMU
 
 ## النظام البيئي
 
-- **[aris](https://github.com/celestia-island/aris)** — محرك متصفح
-- **[evernight](https://github.com/celestia-island/evernight)** — وسيط بروتوكولات صناعية
-- **[entelecheia](https://github.com/celestia-island/entelecheia)** — منصة وكلاء الذكاء الاصطناعي
+- **[aris](https://github.com/celestia-island/aris)** — محرك متصفح مشتق من servo
 
 ## الترخيص
 

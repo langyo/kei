@@ -28,11 +28,8 @@
 
 ## What is KEI?
 
-KEI is a Rust OS kernel for ARM64 and RISC-V edge devices. It runs the
-[evernight](https://github.com/celestia-island/evernight) protocol broker and
-provides the syscall ABI that [aris](https://github.com/celestia-island/aris)
-(the browser engine) runs on. It also ships a `#![no_std]` library for embassy
-sensor nodes.
+KEI is a Rust OS kernel for ARM64 and RISC-V edge devices. It also ships a
+`#![no_std]` library for embassy sensor nodes.
 
 KEI is derived from [Asterinas (星绽)](https://github.com/asterinas/asterinas),
 a Rust framekernel. It adds ARM64 board support, virtio-gpu display, industrial
@@ -50,7 +47,7 @@ flowchart TB
         EMB["embassy MCU firmware\nusing kei no_std library"]
     end
     SENSORS -->|"kei wire protocol\n(UART / RS-485)"| Gateway
-    Gateway -->|"WebSocket / MQTT"| CLOUD["Cloud platform\n(Entelecheia)"]
+    Gateway -->|"WebSocket / MQTT"| CLOUD["Cloud platform"]
 ```
 
 ## What's in this repo?
@@ -80,9 +77,7 @@ See the [library guide](./docs/en/guides/kei-library.md) and
 
 ## Ecosystem
 
-- **[aris](https://github.com/celestia-island/aris)** — browser engine (runs on KEI's syscall ABI)
-- **[evernight](https://github.com/celestia-island/evernight)** — industrial protocol broker
-- **[entelecheia](https://github.com/celestia-island/entelecheia)** — AI agent platform
+- **[aris](https://github.com/celestia-island/aris)** — servo-derived browser engine
 
 ## License
 

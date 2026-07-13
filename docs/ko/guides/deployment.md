@@ -2,9 +2,8 @@
 
 ## 개요
 
-kei는 `kei-kernel.bin` — [aris](https://github.com/celestia-island/aris)가
-사용하는 ARM64 지원 Asterinas 커널을 생성합니다. 이 가이드는 커널 빌드,
-QEMU 테스트 및 물리적 하드웨어 배포를 다룹니다.
+kei는 `kei-kernel.bin` — ARM64 지원 Asterinas 커널을 생성합니다. 이
+가이드는 커널 빌드, QEMU 테스트 및 물리적 하드웨어 배포를 다룹니다.
 
 ## 빌드 파이프라인
 
@@ -13,8 +12,7 @@ flowchart LR
     SRC["Source\nostd/ kernel/ bsp/"] -->|"cargo build\n(aarch64)"| BIN["kei-kernel.bin"]
     BIN --> QEMU["QEMU Test\n(virt/cortex-a55)"]
     QEMU -->|passes| PACK["Package\n(DTB + initramfs)"]
-    PACK --> ARIS["aris firmware\n(image.img)"]
-    ARIS --> FLASH["Flash SD card"]
+    PACK --> FLASH["Flash SD card"]
     FLASH --> BOARD["NanoPi R3S"]
 ```
 
@@ -130,7 +128,6 @@ flowchart TB
 
 ```bash
 # Build the complete firmware image (includes kei-kernel.bin)
-# Run from aris repository — aris packages kei as a submodule/dependency
 just build-board nanopi-r3s
 
 # Flash to SD card
@@ -161,8 +158,6 @@ kei-kernel booting...
 [KEI] starting SMP...
 [KEI] 4 cores online
 ...
-aris-core v0.1.0 starting...
-evernight daemon starting...
 ```
 
 ### 부트 순서
@@ -172,42 +167,7 @@ flowchart TB
     ROM["Mask ROM"] --> SPL["U-Boot SPL"]
     SPL --> TPL["U-Boot Proper"]
     TPL -->|"load kernel + DTB\nfrom mmc"| KEI["kei-kernel.bin"]
-    KEI -->|"Transfer to EL1"| INIT["initramfs\naris-core (PID 1)"]
-    INIT --> EVN["evernight daemon"]
-    EVN -->|"WebSocket TLS"| ENT["entelecheia"]
-```
-
-## aris와의 통합
-
-kei는 커널 바이너리를 제공하고, aris는 이를 부팅 가능한 이미지로 패키징
-합니다:
-
-```
-aris repository                     kei repository
-─────────────────                   ─────────────────
-packages/core/        supervisor    kernel/          kernel source
-packages/builder/     image builder ostd/            core infra
-overlay/              rootfs files  bsp/             board support
-scripts/              build + flash board/           board configs
-│                                    │
-│  just build-board                  │  just build
-│    ├── cross-compile aris-core     │    └── cargo build (aarch64)
-│    ├── fetch kei-kernel.bin        │
-│    ├── assemble image.img          │
-│    └── just flash-sd /dev/sdX      │
-```
-
-통합 검증:
-
-```bash
-# In aris repo: build with kei kernel
-just build-board nanopi-r3s
-
-# Boot in QEMU with the full image
-just test-qemu
-
-# Verify kei kernel version in boot log
-grep "kei-kernel" output/boot.log
+    KEI -->|"Transfer to EL1"| INIT["kei init\n(사용자 공간)"]
 ```
 
 ## 문제 해결
@@ -219,4 +179,3 @@ grep "kei-kernel" output/boot.log
 | SMP 실패 | DTB에 PSCI 누락 | 디바이스 트리의 `/cpus` 노드 확인 |
 | Kernel panic | 아키텍처 계층의 코드 버그 | `ostd/src/arch/aarch64/` 감사 |
 | U-Boot가 커널을 찾을 수 없음 | 잘못된 파티션 오프셋 | `boot.scr`의 오프셋 확인 |
-| evernight 연결 불가 | 네트워크 미설정 | `/data/network.toml` 확인 |

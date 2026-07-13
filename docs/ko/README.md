@@ -28,7 +28,7 @@
 
 ## 소개
 
-KEI는 ARM64 및 RISC-V 엣지 디바이스를 위한 Rust OS 커널입니다. [evernight](https://github.com/celestia-island/evernight) 프로토콜 브로커를 실행하고 [aris](https://github.com/celestia-island/aris) (브라우저 엔진)에 syscall ABI를 제공합니다. embassy 센서 노드용 `#![no_std]` 라이브러리도 포함합니다.
+KEI는 ARM64 및 RISC-V 엣지 디바이스를 위한 Rust OS 커널입니다. embassy 센서 노드용 `#![no_std]` 라이브러리도 포함합니다.
 
 KEI는 [Asterinas(星绽)](https://github.com/asterinas/asterinas)에서 파생된 Rust 프레임커널입니다.
 
@@ -48,9 +48,7 @@ just test-all     # QEMU 부트 테스트
 
 ## 생태계
 
-- **[aris](https://github.com/celestia-island/aris)** — 브라우저 엔진
-- **[evernight](https://github.com/celestia-island/evernight)** — 산업용 프로토콜 브로커
-- **[entelecheia](https://github.com/celestia-island/entelecheia)** — AI 에이전트 플랫폼
+- **[aris](https://github.com/celestia-island/aris)** — servo에서 파생된 브라우저 엔진
 
 ## 라이선스
 

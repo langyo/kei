@@ -28,7 +28,7 @@
 
 ## Введение
 
-KEI — ядро ОС на Rust для edge-устройств ARM64 и RISC-V. Запускает брокер [evernight](https://github.com/celestia-island/evernight) и предоставляет syscall ABI для [aris](https://github.com/celestia-island/aris) (браузерного движка). Включает библиотеку `#![no_std]` для сенсорных узлов embassy.
+KEI — ядро ОС на Rust для edge-устройств ARM64 и RISC-V. Включает библиотеку `#![no_std]` для сенсорных узлов embassy.
 
 KEI основан на [Asterinas (星绽)](https://github.com/asterinas/asterinas), фрейм-ядре на Rust.
 
@@ -48,9 +48,7 @@ just test-all     # Загрузочный тест QEMU
 
 ## Экосистема
 
-- **[aris](https://github.com/celestia-island/aris)** — браузерный движок
-- **[evernight](https://github.com/celestia-island/evernight)** — промышленный протокольный брокер
-- **[entelecheia](https://github.com/celestia-island/entelecheia)** — платформа AI-агентов
+- **[aris](https://github.com/celestia-island/aris)** — браузерный движок на базе servo
 
 ## Лицензия
 

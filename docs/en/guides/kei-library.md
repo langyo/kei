@@ -1,8 +1,7 @@
 # kei no_std Library
 
 The `kei` library (`packages/kei/`) is a `#![no_std]` Rust crate that provides
-the shared contract between embassy-based sensor nodes and the evernight
-gateway broker.
+the shared contract between embassy-based sensor nodes and the gateway broker.
 
 ## What it provides
 

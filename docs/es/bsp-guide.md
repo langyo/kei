@@ -123,4 +123,4 @@ just build   # Build with your BSP
 just test    # Boot in QEMU, check console output
 ```
 
-Para pruebas en hardware, flashear el firmware aris que incluye el kernel kei.
+Para pruebas en hardware, flashear una imagen que incluya el kernel kei.

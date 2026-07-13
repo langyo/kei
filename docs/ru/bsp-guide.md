@@ -122,4 +122,4 @@ just build   # Build with your BSP
 just test    # Boot in QEMU, check console output
 ```
 
-Для тестирования на железе прошить прошивку aris, включающую ядро kei.
+Для тестирования на железе прошить образ, включающий ядро kei.

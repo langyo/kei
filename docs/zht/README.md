@@ -28,7 +28,7 @@
 
 ## 簡介
 
-KEI 是面向 ARM64 和 RISC-V 邊緣設備的 Rust OS 核心。它執行 [evernight](https://github.com/celestia-island/evernight) 協定代理，並為 [aris](https://github.com/celestia-island/aris)（瀏覽器引擎）提供 syscall ABI。同時附帶面向 embassy 感測器節點的 `#![no_std]` 庫。
+KEI 是面向 ARM64 和 RISC-V 邊緣設備的 Rust OS 核心。同時附帶面向 embassy 感測器節點的 `#![no_std]` 庫。
 
 KEI 源自 [Asterinas（星綻）](https://github.com/asterinas/asterinas)，一個 Rust 框架核心。KEI 在其基礎上增加了 ARM64 板級支援、virtio-gpu 顯示、工業驅動和感測器節點通訊協定。
 
@@ -48,9 +48,7 @@ just test-all     # QEMU 啟動測試
 
 ## 生態
 
-- **[aris](https://github.com/celestia-island/aris)** — 瀏覽器引擎
-- **[evernight](https://github.com/celestia-island/evernight)** — 工業協定代理
-- **[entelecheia](https://github.com/celestia-island/entelecheia)** — AI agent 平台
+- **[aris](https://github.com/celestia-island/aris)** — 由 servo 派生的瀏覽器引擎
 
 ## 授權條款
 

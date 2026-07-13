@@ -28,7 +28,7 @@
 
 ## 简介
 
-KEI 是面向 ARM64 和 RISC-V 边缘设备的 Rust OS 内核。它运行 [evernight](https://github.com/celestia-island/evernight) 协议代理，并为 [aris](https://github.com/celestia-island/aris)（浏览器引擎）提供 syscall ABI。同时附带面向 embassy 传感器节点的 `#![no_std]` 库。
+KEI 是面向 ARM64 和 RISC-V 边缘设备的 Rust OS 内核。同时附带面向 embassy 传感器节点的 `#![no_std]` 库。
 
 KEI 源自 [Asterinas（星绽）](https://github.com/asterinas/asterinas)，一个 Rust 框架内核。KEI 在其基础上增加了 ARM64 板级支持、virtio-gpu 显示、工业驱动和传感器节点通信协议——同时保持独立于上游的发布周期。
 
@@ -43,7 +43,7 @@ flowchart TB
         EMB["embassy MCU 固件\n使用 kei no_std 库"]
     end
     SENSORS -->|"kei 通信协议\n(UART / RS-485)"| Gateway
-    Gateway -->|"WebSocket / MQTT"| CLOUD["云平台\n(Entelecheia)"]
+    Gateway -->|"WebSocket / MQTT"| CLOUD["云平台"]
 ```
 
 ## 仓库内容
@@ -70,9 +70,7 @@ cargo run --example host_demo
 
 ## 生态
 
-- **[aris](https://github.com/celestia-island/aris)** — 浏览器引擎（运行在 KEI 的 syscall ABI 之上）
-- **[evernight](https://github.com/celestia-island/evernight)** — 工业协议代理
-- **[entelecheia](https://github.com/celestia-island/entelecheia)** — AI agent 平台
+- **[aris](https://github.com/celestia-island/aris)** — 基于 servo 派生的浏览器引擎
 
 ## 许可证
 

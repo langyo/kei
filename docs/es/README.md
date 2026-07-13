@@ -28,7 +28,7 @@
 
 ## Introducción
 
-KEI es un núcleo OS Rust para dispositivos edge ARM64 y RISC-V. Ejecuta el broker [evernight](https://github.com/celestia-island/evernight) y proporciona el ABI syscall para [aris](https://github.com/celestia-island/aris) (el motor de navegador). También incluye una biblioteca `#![no_std]` para nodos sensores embassy.
+KEI es un núcleo OS Rust para dispositivos edge ARM64 y RISC-V. También incluye una biblioteca `#![no_std]` para nodos sensores embassy.
 
 KEI deriva de [Asterinas (星绽)](https://github.com/asterinas/asterinas), un framekernel Rust.
 
@@ -48,9 +48,7 @@ just test-all     # Prueba de arranque QEMU
 
 ## Ecosistema
 
-- **[aris](https://github.com/celestia-island/aris)** — motor de navegador
-- **[evernight](https://github.com/celestia-island/evernight)** — broker de protocolos industriales
-- **[entelecheia](https://github.com/celestia-island/entelecheia)** — plataforma de agentes IA
+- **[aris](https://github.com/celestia-island/aris)** — motor de navegador derivado de servo
 
 ## Licencia
 

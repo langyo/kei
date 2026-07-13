@@ -122,4 +122,4 @@ just build   # Build with your BSP
 just test    # Boot in QEMU, check console output
 ```
 
-ハードウェアテストでは、kei カーネルを含む aris ファームウェアを書き込みます。
+ハードウェアテストでは、kei カーネルを同梱したイメージを書き込みます。
