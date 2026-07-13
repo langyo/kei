@@ -84,10 +84,19 @@ unsafe extern "C" fn trap_handler_el1(f: &mut TrapFrame) {
                 return;
             }
 
+            // Read current SP for diagnosis (kernel faults use the same SP).
+            let sp: usize;
+            unsafe { core::arch::asm!("mov {}, sp", out(reg) sp); }
+            // Dump x0-x9 from the trap frame for diagnosis.
+            let g = &f.general;
             panic!(
                 "Unhandled kernel page fault: \
-                 ESR_EL1={:#018x}, FAR_EL1={:#018x}, ELR_EL1={:#018x}",
-                esr, far, f.elr_el1,
+                 ESR_EL1={:#018x}, FAR_EL1={:#018x}, ELR_EL1={:#018x}, SP={:#018x}\n\
+                 x0={:#018x} x1={:#018x} x2={:#018x} x3={:#018x}\n\
+                 x4={:#018x} x5={:#018x} x6={:#018x} x7={:#018x}",
+                esr, far, f.elr_el1, sp,
+                g.x0, g.x1, g.x2, g.x3,
+                g.x4, g.x5, g.x6, g.x7,
             );
         }
         // EC = 0x07: Trapped SIMD/FP access (FPU not enabled)

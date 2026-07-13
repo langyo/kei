@@ -5,7 +5,7 @@ use aster_framebuffer::{
     pixel::PixelFormat,
 };
 use device_id::{DeviceId, MajorId, MinorId};
-use ostd::mm::{HasPaddr, HasSize, VmIo, VmReader, VmWriter};
+use ostd::mm::{FallibleVmRead, HasPaddr, HasSize, VmIo, VmReader, VmWriter};
 
 use super::{Device, DeviceType, DevtmpfsInodeMeta, registry::char};
 use crate::{
@@ -535,25 +535,41 @@ impl FileOps for FbHandle {
             reader.skip(copied);
             Ok(copied)
         } else {
-            // Blit-backed framebuffer: copy userspace bytes directly to the DMA
-            // buffer via the stable linear mapping. Use a small stack buffer
-            // to avoid large heap allocations.
-            const CHUNK: usize = 8192;
+            // Blit-backed framebuffer: copy userspace bytes to the DMA buffer
+            // via the stable linear mapping. Use a small stack buffer copied
+            // through the VmReader/VmWriter API (which handles user/kernel
+            // access correctly).
+            //
+            // We deliberately do NOT call flush_all() here. The flush path
+            // (flush_framebuffer) hits a deterministic ostd page-table bug after
+            // ~7 invocations under repeated write() syscalls, crashing the kernel.
+            // The raw-probe initial fill already pushed a test pattern; the
+            // framebuffer console's own flush path (or kei_desktop's single
+            // explicit ioctl-triggered flush) will make new pixels visible.
+            const CHUNK: usize = 4096;
             let mut total = 0;
             let mut off = offset;
             while total < len {
                 let n = (len - total).min(CHUNK);
                 let mut buf = [0u8; CHUNK];
-                #[allow(unsafe_code)]
-                unsafe {
-                    core::ptr::copy_nonoverlapping(reader.cursor(), buf.as_mut_ptr(), n);
+                // Use the fallible read API: the reader is a user-space
+                // Fallible VmReader, and we read into a kernel Fallible writer
+                // wrapping our stack buffer. read_fallible returns
+                // Ok(copied) or Err((err, copied)).
+                let mut writer = VmWriter::from(&mut buf[..n]).to_fallible();
+                let copied = match reader.read_fallible(&mut writer) {
+                    Ok(c) => c,
+                    Err((_, c)) => c,
+                };
+                if copied == 0 {
+                    break;
                 }
-                reader.skip(n);
-                self.framebuffer.write_bytes_at(off, &buf[..n])?;
-                total += n;
-                off += n;
+                self.framebuffer.write_bytes_at(off, &buf[..copied])?;
+                total += copied;
+                off += copied;
             }
-            self.framebuffer.flush_all();
+            // No flush here — kei_desktop triggers a single flush via
+            // FBIOPAN_DISPLAY ioctl after writing the full frame.
             Ok(total)
         }
     }
@@ -623,9 +639,18 @@ impl PerOpenFileOps for FbHandle {
                 self.handle_set_cmap(&cmd.read()?)?;
                 Ok(0)
             }
-            PanDisplay | Blank => {
-                // These commands are not supported by efifb.
-                // We return errors according to the Linux behavior.
+            PanDisplay => {
+                // Hijack FBIOPAN_DISPLAY as an explicit "flush the framebuffer
+                // to the scanout" trigger for Blit-backed devices. The normal
+                // write_at path does NOT flush (to avoid the ostd page-table
+                // crash under repeated flushes). kei_desktop calls this once
+                // after writing the full frame to make all pixels visible in a
+                // single virtio-gpu TRANSFER_TO_HOST_2D + RESOURCE_FLUSH.
+                self.framebuffer.flush_all();
+                Ok(0)
+            }
+            Blank => {
+                // Not supported by efifb.
                 return_errno_with_message!(
                     Errno::EINVAL,
                     "the ioctl command is not supported by efifb devices"

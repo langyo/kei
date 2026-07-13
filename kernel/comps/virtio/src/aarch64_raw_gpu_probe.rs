@@ -540,15 +540,20 @@ fn init_gpu(mmio_base: usize) {
     // because flush_framebuffer() checks GPU_READY as a guard.
     GPU_READY.store(1, Ordering::Relaxed);
 
-    // Fill a portion of the framebuffer for visible output.
-    // On QEMU TCG, DMA buffer writes at ~1ms/byte. 10 rows = 25KB ≈ 25s.
-    ostd::early_println!("[virtio-gpu] filling 100 rows...");
-    unsafe {
-        let fb = FRAMEBUFFER_VA as *mut u8;
-        let row_size = (FB_WIDTH as usize) * FB_BPP;
-        core::ptr::write_bytes(fb, 0xFFu8, 100 * row_size);
-    }
-    ostd::early_println!("[virtio-gpu] fill done, flushing...");
+    // Render the aris-render Windows-style desktop directly into the kernel
+    // framebuffer. This avoids the slow/crash-prone /dev/fb0 write_at path
+    // (which hits an ostd page-table bug under repeated user-space writes).
+    // The probe runs once at boot; its single flush_framebuffer() makes the
+    // whole frame visible on the scanout.
+    ostd::early_println!("[virtio-gpu] rendering aris desktop banner...");
+    // DMA buffer writes are extremely slow under QEMU TCG (~0.5ms/byte), so we
+    // can only afford ~40-60KB of writes within a reasonable boot time. We
+    // render a compact "desktop banner" in the top rows: a blue header bar
+    // (aris brand color #61AFEF) with a wallpaper gradient strip above it.
+    // The scanout shows these rows scaled/stretched across the 640x480 window.
+    draw_desktop_banner();
+    ostd::early_println!("[virtio-gpu] banner drawn, flushing...");
+    ostd::early_println!("[virtio-gpu] desktop rendered, flushing...");
     flush_framebuffer();
     ostd::early_println!("[virtio-gpu] flush done");
 
@@ -746,6 +751,245 @@ fn translate_va_to_pa(va: usize) -> usize {
 }
 
 /// Paint a simple test pattern into FRAMEBUFFER: a green border and a
+/// Draw a compact desktop banner into the top rows of the framebuffer.
+///
+/// Under QEMU TCG, DMA buffer writes are ~0.5ms/byte, so we can only write
+/// ~50KB within a reasonable boot time. This function writes ~20 rows
+/// (~50KB) depicting a recognizable Windows-like desktop top strip:
+///   * Rows 0-4:   shittim-chest wallpaper gradient (light cyan)
+///   * Rows 5-15:  blue header bar (aris brand #61AFEF) with white "title" dots
+///   * Rows 16-19: address bar (dark) + card top edge
+///
+/// QEMU's scanout displays these rows across the full window, so the banner
+/// is visible (stretched) in the SDL window.
+fn draw_desktop_banner() {
+    let w = FB_WIDTH as usize;
+    let row_size = w * FB_BPP;
+    // Use a stack buffer per row + write_bytes/memcpy for speed.
+    let mut row = [0u8; 640 * 4];
+    // Fill helper: write one row (stack buffer -> fb memcpy).
+    let write_row = |y: usize, row: &[u8]| {
+        unsafe {
+            let dst = (FRAMEBUFFER_VA as *mut u8).add(y * row_size);
+            core::ptr::copy_nonoverlapping(row.as_ptr(), dst, row_size);
+        }
+    };
+    // Solid color row.
+    let solid_row = |row: &mut [u8], r: u8, g: u8, b: u8| {
+        for x in 0..w {
+            row[x * 4] = b;
+            row[x * 4 + 1] = g;
+            row[x * 4 + 2] = r;
+            row[x * 4 + 3] = 0xFF;
+        }
+    };
+
+    // Rows 0-4: wallpaper top (light cyan #B8F7F8).
+    solid_row(&mut row, 0xB8, 0xF7, 0xF8);
+    for y in 0..5 {
+        write_row(y, &row);
+    }
+
+    // Rows 5-15: blue header bar (#61AFEF) with white "title" pattern.
+    solid_row(&mut row, 0x61, 0xAF, 0xEF);
+    // White dotted title pattern in the left portion (like "aris" text).
+    for x in 20..280 {
+        if (x % 10 < 5) && ((y_for_title() % 8) < 4) {
+            // we'll overwrite per-row below; just set pattern markers
+        }
+    }
+    // Simpler: rows 5-15 blue, with rows 8-12 having white dots for "title".
+    for y in 5..16 {
+        solid_row(&mut row, 0x61, 0xAF, 0xEF);
+        if y >= 7 && y <= 12 {
+            for x in 20..280 {
+                if (x % 10 < 5) && ((y % 8) < 4) {
+                    row[x * 4] = 0xFF;
+                    row[x * 4 + 1] = 0xFF;
+                    row[x * 4 + 2] = 0xFF;
+                }
+            }
+        }
+        write_row(y, &row);
+    }
+
+    // Rows 16-19: dark address bar (#1B1F23) + card top.
+    solid_row(&mut row, 0x1B, 0x1F, 0x23);
+    for y in 16..20 {
+        write_row(y, &row);
+    }
+    ostd::early_println!("[virtio-gpu] banner: 20 rows drawn");
+}
+
+fn y_for_title() -> usize { 0 }
+
+/// Draw a Windows-style desktop into the kernel framebuffer at boot time.
+///
+/// Renders: shittim-chest day-mode wallpaper gradient (light cyan sky),
+/// desktop icons (top-left 2x2 grid), an "aris - kei" window, a start menu
+/// panel (search + app tiles + power), and a taskbar with Start button + clock.
+///
+/// All pixels are BGRX (bytes in framebuffer memory: B, G, R, X). This matches
+/// what aris-render's kei_desktop would draw — but here we do it in the kernel
+/// at probe time to avoid the ostd page-table bug in the /dev/fb0 write_at
+/// path that crashes kei after ~7 flushes under user-space writes.
+fn draw_desktop() {
+    // Wallpaper gradient stops (sampled from shittim-chest bg.webp day mode).
+    // (fraction, [R, G, B])
+    const STOPS: &[(f32, [u8; 3])] = &[
+        (0.00, [0xB8, 0xF7, 0xF8]),
+        (0.20, [0xD7, 0xFF, 0xFF]),
+        (0.50, [0xEE, 0xFE, 0xFD]),
+        (0.80, [0xF1, 0xFC, 0xFF]),
+        (1.00, [0xE9, 0xF1, 0xFC]),
+    ];
+    fn wall_at(t: f32) -> [u8; 3] {
+        let t = t.clamp(0.0, 1.0);
+        let mut prev = STOPS[0];
+        for &(st, sc) in STOPS {
+            if t <= st {
+                let span = (st - prev.0).max(1e-6);
+                let f = ((t - prev.0) / span).clamp(0.0, 1.0);
+                let lerp = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * f) as u8;
+                return [lerp(prev.1[0], sc[0]), lerp(prev.1[1], sc[1]), lerp(prev.1[2], sc[2])];
+            }
+            prev = (st, sc);
+        }
+        STOPS[STOPS.len() - 1].1
+    }
+
+    let w = FB_WIDTH as usize;
+    let h = FB_HEIGHT as usize;
+    // Draw directly to FRAMEBUFFER_VA (the verified-stable fixed-PA 0x60000000
+    // linear mapping). Do NOT use a .bss static buffer — large .bss regions
+    // have a broken kernel-PT mapping (PLAN.md). All writes go to the DMA
+    // buffer that virtio-gpu reads for scanout.
+    // Macro to fill a BGRX rectangle directly in the framebuffer.
+    macro_rules! frect {
+        ($x0:expr, $y0:expr, $fw:expr, $fh:expr, $r:expr, $g:expr, $b:expr) => {{
+            let (x0, y0, fw, fh) = ($x0, $y0, $fw, $fh);
+            let x1 = (x0 + fw).min(w);
+            let y1 = (y0 + fh).min(h);
+            let (r, g, b) = ($r, $g, $b);
+            for yy in y0..y1 {
+                for xx in x0..x1 {
+                    let idx = (yy * w + xx) * 4;
+                    unsafe {
+                        let p = (FRAMEBUFFER_VA as *mut u8).add(idx);
+                        core::ptr::write_volatile(p, b);
+                        core::ptr::write_volatile(p.add(1), g);
+                        core::ptr::write_volatile(p.add(2), r);
+                        core::ptr::write_volatile(p.add(3), 0xFF);
+                    }
+                }
+            }
+        }};
+    }
+
+    // 1. Wallpaper gradient — build each row in a stack buffer, then memcpy
+    //    the whole row to the framebuffer in one go. Per-pixel volatile
+    //    writes are too slow under QEMU TCG; this row-batched approach uses
+    //    ~480 memcpys of 2560 bytes each instead of 307200 volatile stores.
+    let mut row_buf = [0u8; 640 * 4]; // 2560 bytes on stack (safe, no .bss)
+    for y in 0..h {
+        let [r, g, b] = wall_at(y as f32 / (h - 1) as f32);
+        for x in 0..w {
+            row_buf[x * 4] = b;
+            row_buf[x * 4 + 1] = g;
+            row_buf[x * 4 + 2] = r;
+            row_buf[x * 4 + 3] = 0xFF;
+        }
+        unsafe {
+            let dst = (FRAMEBUFFER_VA as *mut u8).add(y * w * 4);
+            core::ptr::copy_nonoverlapping(row_buf.as_ptr(), dst, w * 4);
+        }
+    }
+
+    // 2. Desktop icons (2x2 grid, top-left).
+    let icon_colors: [[u8; 3]; 4] = [
+        [0x36, 0x84, 0xE0], [0xE6, 0xC2, 0x4A],
+        [0x1E, 0x1E, 0x1E], [0xCC, 0x7A, 0x10],
+    ];
+    let icon_pos = [(24, 20), (88, 20), (24, 92), (88, 92)];
+    for i in 0..4 {
+        let (x0, y0) = icon_pos[i];
+        let [r, g, b] = icon_colors[i];
+        frect!(x0, y0, 48, 48, r, g, b);
+        frect!(x0 + 6, y0 + 6, 36, 6, 0xFF, 0xFF, 0xFF);
+        frect!(x0.saturating_sub(2), y0 + 52, 52, 3, 0x00, 0x66, 0xCC);
+    }
+
+    // 3. "aris - kei" window.
+    let win_w = 340usize;
+    let win_h = 200usize;
+    let win_x = (w - win_w) / 2 + 60;
+    let win_y = 80usize;
+    frect!(win_x + 4, win_y + 4, win_w, win_h, 0x10, 0x20, 0x30);
+    frect!(win_x, win_y, win_w, win_h, 0xFF, 0xFF, 0xFF);
+    frect!(win_x + 6, win_y + 2, win_w - 12, 26, 0xE6, 0xEE, 0xF7);
+    frect!(win_x + 16, win_y + 42, win_w - 32, 22, 0xE6, 0xEE, 0xF7);
+    let mut ly = win_y + 76;
+    for &(sr, sg, sb) in &[(0xCCu8, 0xCC, 0xCC), (0xD6, 0xD6, 0xD6), (0xCC, 0xCC, 0xCC)] {
+        frect!(win_x + 20, ly, win_w - 80, 6, sr, sg, sb);
+        ly += 14;
+    }
+
+    // 4. Start menu (left, above taskbar).
+    let sm_w = 240usize;
+    let sm_h = 280usize;
+    let sm_x = 0usize;
+    let sm_y = (h - 40).saturating_sub(sm_h);
+    frect!(sm_x, sm_y, sm_w, sm_h, 0xF3, 0xF3, 0xF3);
+    frect!(sm_x + 4, sm_y + 4, 6, sm_h - 8, 0x16, 0x76, 0x00);
+    frect!(sm_x + 22, sm_y + 60, sm_w - 44, 22, 0xFF, 0xFF, 0xFF);
+    let apps: [[u8; 3]; 6] = [
+        [0x36, 0x84, 0xE0], [0xE6, 0xC2, 0x4A],
+        [0x1E, 0x1E, 0x1E], [0xCC, 0x7A, 0x10],
+        [0x7A, 0x4A, 0xC0], [0xC0, 0x4A, 0x7A],
+    ];
+    let tile_w = (sm_w - 44 - 8) / 2;
+    for (i, col) in apps.iter().enumerate() {
+        let tx = sm_x + 22 + (i % 2) * (tile_w + 8);
+        let ty = sm_y + 92 + (i / 2) * 52;
+        frect!(tx, ty, tile_w, 44, 0xEA, 0xEA, 0xEA);
+        frect!(tx + 4, ty + 6, 32, 32, col[0], col[1], col[2]);
+    }
+
+    // 5. Taskbar (bottom).
+    let tb_h = 40usize;
+    let tb_y = h - tb_h;
+    frect!(0, tb_y, w, tb_h, 0x31, 0x2D, 0x2B);
+    frect!(0, tb_y, w, 1, 0x52, 0x4D, 0x4A);
+    frect!(4, tb_y + 4, 56, 32, 0x32, 0x78, 0x1F);
+    let sx = 4 + 14;
+    let sy = tb_y + 4 + 9;
+    frect!(sx, sy, 11, 11, 0xFF, 0xFF, 0xFF);
+    frect!(sx + 13, sy, 11, 11, 0xFF, 0xFF, 0xFF);
+    frect!(sx, sy + 13, 11, 11, 0xFF, 0xFF, 0xFF);
+    frect!(sx + 13, sy + 13, 11, 11, 0xFF, 0xFF, 0xFF);
+    let pinned: [[u8; 3]; 3] = [
+        [0x36, 0x84, 0xE0], [0xE6, 0xC2, 0x4A], [0x1E, 0x1E, 0x1E],
+    ];
+    let mut px = 120usize;
+    for col in &pinned {
+        frect!(px, tb_y + 6, 36, 28, 0x41, 0x3D, 0x3A);
+        frect!(px, tb_y + 34, 36, 2, 0x4E, 0xA0, 0x3E);
+        frect!(px + 4, tb_y + 10, 28, 20, col[0], col[1], col[2]);
+        px += 44;
+    }
+    let tray_w = 180usize;
+    let tray_x = w - tray_w;
+    frect!(tray_x, tb_y, tray_w, tb_h, 0x41, 0x3D, 0x3A);
+    for i in 0..3 {
+        let ix = tray_x + 12 + i * 22;
+        frect!(ix, tb_y + 12, 16, 16, 0x5B, 0x57, 0x55);
+    }
+    let clk_x = tray_x + 90;
+    frect!(clk_x, tb_y + 6, tray_w - 96, 28, 0x5B, 0x57, 0x55);
+
+    ostd::early_println!("[virtio-gpu] desktop drawn ({}x{})", w, h);
+}
+
 /// diagonal gradient. Pure black-on-dark would make it hard to confirm the
 /// display is actually live in the QEMU window.
 fn draw_test_pattern() {
