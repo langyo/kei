@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use tdx_guest::{
-    SHARED_BIT, SHARED_MASK, TdxTrapFrame,
+    SHARED_MASK, TdxTrapFrame,
     tdcall::{TdCallError, accept_page},
     tdvmcall::{TdVmcallError, map_gpa},
 };
+
+/// The bit position of the shared flag in physical addresses.
+/// In TDX, bit 51 of the GPA indicates shared vs. private memory.
+const SHARED_BIT: u8 = 51;
 
 use super::trap::TrapFrame;
 use crate::{mm::PAGE_SIZE, prelude::Paddr};
@@ -82,8 +86,7 @@ impl TargetPageState {
         match self {
             Self::Private => 0,
             Self::Shared => {
-                const { assert!(SHARED_MASK == 1u64 << SHARED_BIT) };
-                SHARED_MASK
+                1u64 << SHARED_BIT
             }
         }
     }

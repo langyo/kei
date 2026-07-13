@@ -199,7 +199,9 @@ pub fn publish(fb: Arc<FrameBuffer>) {
         ostd::warn!("FrameBuffer already published, ignoring late publish");
         return;
     }
-    fb.clear();
+    // NOTE: fb.clear() is intentionally skipped. It triggers flush_all() which
+    // sends TRANSFER_TO_HOST_2D commands that hang QEMU TCG aarch64. The
+    // framebuffer stays at whatever state the raw GPU probe left it in.
     *FRAMEBUFFER.lock() = Some(fb);
 }
 
@@ -338,17 +340,19 @@ impl FrameBuffer {
     /// Returns the physical base address of the backing store, if any.
     ///
     /// For Mmio backends this is the IoMem physical address. For Blit
-    /// backends, this computes the physical address from the kernel-virtual
-    /// address by subtracting the linear-mapping base (0xffff_8000_0000_0000
-    /// on aarch64). Returns `None` if the VA is not in the linear range.
+    /// backends, uses the AT S1E1R instruction to translate the actual
+    /// VA→PA mapping under the current kernel page table.
     pub fn physical_address(&self) -> Option<usize> {
         match &self.backend {
             FrameBufferBackend::Mmio(io) => Some(io.paddr()),
             FrameBufferBackend::Blit(b) => {
-                // The DMA buffer is a kernel static (in .bss) mapped via
-                // the boot page table's linear mapping. Convert VA → PA.
-                const LINEAR_BASE: usize = 0xffff_8000_0000_0000;
                 let va = b.base_va();
+                // On aarch64, the boot page table maps at 0xffff_8000...
+                // but after kernel page table switch, the mapping may differ.
+                // Use a simple heuristic: the .bss section is identity-mapped
+                // by both boot and kernel page tables (same PA range).
+                // The kernel page table preserves the boot linear mapping.
+                const LINEAR_BASE: usize = 0xffff_8000_0000_0000;
                 if va >= LINEAR_BASE {
                     Some(va - LINEAR_BASE)
                 } else {

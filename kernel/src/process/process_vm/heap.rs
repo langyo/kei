@@ -138,9 +138,10 @@ impl Heap {
         // Because the mapped heap region may contain multiple mappings, which can be
         // done by `mmap` syscall or other ways, we need to be careful when modifying
         // the heap mapping.
-        // For simplicity, we set `check_single_mapping` to `true` to ensure that the
-        // heap region contains only a single mapping.
-        vmar.resize_mapping(heap_start, old_size, new_size, true)
+        // musl's malloc may mmap near the heap region, breaking the single-mapping
+        // assumption. Use check_single_mapping=false to allow resize even when
+        // other mappings exist near the heap.
+        vmar.resize_mapping(heap_start, old_size, new_size, false)
             .map_err(|_| current_heap_end)?;
 
         inner.heap_range = new_heap_range;

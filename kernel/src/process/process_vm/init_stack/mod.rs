@@ -274,6 +274,14 @@ impl InitStackWriter<'_> {
         };
         self.auxvec.set(AuxKey::AT_RANDOM, random_value_pointer);
 
+        // AT_EXECFN: the kernel traditionally places the executable filename
+        // on the stack and points AT_EXECFN at it. musl's libc init reads this
+        // to set __progname; if missing, some musl versions dereference NULL.
+        // We use argv[0], which is the program path (e.g., "/init").
+        if let Some(&argv0_ptr) = argv_pointers.first() {
+            self.auxvec.set(AuxKey::AT_EXECFN, argv0_ptr);
+        }
+
         self.adjust_stack_alignment(&envp_pointers, &argv_pointers)?;
         let auxv_end = self.pos();
         self.write_aux_vec()?;

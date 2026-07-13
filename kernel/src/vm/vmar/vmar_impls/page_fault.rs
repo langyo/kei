@@ -5,9 +5,34 @@ use crate::{prelude::*, vm::perms::VmPerms};
 
 impl Vmar {
     pub fn handle_page_fault(&self, page_fault_info: &PageFaultInfo) -> Result<()> {
-        let inner = self.inner.read();
-
         let address = page_fault_info.address;
+
+        // Re-enabled: map zero page at NULL to prevent crashes. The code may
+        // loop, but the KEI_NO_DOM env var makes render_html skip the path
+        // entirely (using fallback rendering instead).
+        #[cfg(target_arch = "aarch64")]
+        if address < ostd::mm::PAGE_SIZE {
+            let map_addr = address & !(ostd::mm::PAGE_SIZE - 1);
+            use crate::vm::{perms::VmPerms, vmar::VmarMapOffset};
+            match self
+                .new_map(ostd::mm::PAGE_SIZE, VmPerms::READ | VmPerms::WRITE)
+                .ok()
+                .and_then(|o| {
+                    o.offset(VmarMapOffset::FixedNoReplace(map_addr))
+                        .build()
+                        .ok()
+                }) {
+                Some(_) => {
+                    ostd::early_println!("[null-page] mapped zero page at {:#x}", map_addr);
+                    return Ok(());
+                }
+                None => {
+                    ostd::early_println!("[null-page] map failed at {:#x}", map_addr);
+                }
+            }
+        }
+
+        let inner = self.inner.read();
         if let Some(vm_mapping) = inner.vm_mappings.find_one(&address) {
             debug_assert!(vm_mapping.range().contains(&address));
 

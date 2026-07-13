@@ -184,7 +184,10 @@ fn do_execve_no_return(
     // computed it). set_cpu_context resets tls_pointer to 0; we must restore
     // the new value so the exec'd process has a valid TPIDR_EL0.
     if let Some(tls_ptr) = elf_load_info.tls_pointer {
+        #[cfg(target_arch = "aarch64")]
         user_context.set_tls_pointer(tls_ptr);
+        #[cfg(not(target_arch = "aarch64"))]
+        let _ = tls_ptr;
     }
 
     // If this was a vfork child, reset vfork-specific state.

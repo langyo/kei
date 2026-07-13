@@ -122,4 +122,4 @@ just build   # Build with your BSP
 just test    # Boot in QEMU, check console output
 ```
 
-لاختبار العتاد، ومض البرنامج الثابت aris الذي يتضمّن نواة kei.
+لاختبار العتاد، ومض صورة تتضمّن نواة kei.

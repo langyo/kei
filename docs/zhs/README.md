@@ -2,7 +2,7 @@
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>面向物联网的操作系统内核 —— 基于 Asterinas 的 RTOS 级设施，兼顾 Linux 生态接入</strong></p>
+<p align="center"><strong>面向工业物联网的 Rust OS 内核——源自 Asterinas（星绽），附带面向嵌入式传感器节点的 no_std 库。</strong></p>
 
 <div align="center">
 
@@ -28,55 +28,51 @@
 
 ## 简介
 
-KEI 是为工业物联网打造的操作系统内核。它在 Asterinas 之上做成一套 RTOS 风格的设施——小、实时、可审计——同时保留通往 Linux 生态的桥梁，让既有的驱动、工具与二进制仍触手可及。它既不是 Linux 发行版，也不是原版 Asterinas。最接近的类比是「一个恰好会说 Linux 的 RTOS」：需要实时确定性的负载得到实时确定性，其余一切享有 Linux 级的软件兼容性。
+KEI 是面向 ARM64 和 RISC-V 边缘设备的 Rust OS 内核。同时附带面向 embassy 传感器节点的 `#![no_std]` 库。
 
-## 分支模式
-
-KEI **不是**跟踪上游的分支。它是一个独立分支，按自己的节奏定期吸收上游变更 ——
-与 Apple 维护其 LLVM 分支采用相同的模式。
+KEI 源自 [Asterinas（星绽）](https://github.com/asterinas/asterinas)，一个 Rust 框架内核。KEI 在其基础上增加了 ARM64 板级支持、virtio-gpu 显示、工业驱动和传感器节点通信协议——同时保持独立于上游的发布周期。
 
 ```mermaid
-flowchart LR
-    UP["asterinas/asterinas\n（活跃上游）"] -->|vendor-upstream.sh\n每 N 个月压缩一次| KEI["kei（本仓库）\n完全独立"]
-    WNY["wanywhn/asterinas\n（arm64-support）"] -->|pull-arm64.sh\n一次性快照| KEI
+flowchart TB
+    subgraph Gateway["KEI 内核"]
+        KERN["RTOS 级内核\nARM64 / RISC-V"]
+        NET["网络栈\nMQTT · WebSocket · HTTP"]
+        DRV["工业驱动\nModbus · CAN · S7comm"]
+    end
+    subgraph Sensors["传感器节点"]
+        EMB["embassy MCU 固件\n使用 kei no_std 库"]
+    end
+    SENSORS -->|"kei 通信协议\n(UART / RS-485)"| Gateway
+    Gateway -->|"WebSocket / MQTT"| CLOUD["云平台"]
 ```
 
-KEI 独立维护 `ostd/src/arch/aarch64/`、`kernel/src/arch/aarch64/`、
-`bsp/`、`board/`、`configs/` 以及 `docs/`。
+## 仓库内容
+
+| 组件 | 位置 | 说明 |
+|------|------|------|
+| **KEI 内核** | workspace root | ARM64/RISC-V Rust OS 内核。syscall ABI、virtio-gpu、帧缓冲、网络栈。 |
+| **kei 库** | `packages/kei/` | 面向 embassy 传感器节点的 `#![no_std]` 库 |
 
 ## 快速开始
 
+**内核：**
 ```bash
-just setup        # Configure git remotes
-just vendor       # Absorb latest upstream asterinas (squash)
-just pull-arm64   # Pull ARM64 code from wanywhn fork (one-time)
-just versions     # Show what upstream versions we're based on
-just build        # Build kernel for nanopi-r3s (aarch64)
-just test-all     # Boot-test all architectures in QEMU
+just build        # 构建默认板卡（NanoPi R3S）
+just test-all     # 在 QEMU 中启动测试所有架构
 ```
 
-## 各目录职责
+**库：**
+```bash
+cd packages/kei
+cargo test --all-features
+cargo run --example host_demo
+```
 
-| 目录 | 来源 | 维护方式 |
-|-----------|--------|-------------|
-| `ostd/` | 上游 asterinas | 定期引入，缺陷就地修复 |
-| `ostd/src/arch/aarch64/` | wanywhn 分支（PR #3270） | **独立** —— 由我们维护 |
-| `kernel/` | 上游 asterinas | 定期引入 |
-| `kernel/src/arch/aarch64/` | wanywhn 分支（PR #3270） | **独立** —— 由我们维护 |
-| `osdk/` | 上游 asterinas | 定期引入 |
-| `bsp/` | kei | **100% 自研** —— 板级支持包 |
-| `board/` `configs/` | kei | **100% 自研** —— 板级定义 |
-| `scripts/` `docs/` | kei | **100% 自研** —— 工具与文档 |
+## 生态
 
-## 支持的架构
-
-| 架构 | 状态 | QEMU 测试 |
-|------|--------|-----------|
-| x86_64 | 上游 Tier 1 | ✅ q35 |
-| aarch64 | kei 维护（源自 PR #3270） | ✅ virt/cortex-a55 |
-| riscv64 | 上游 Tier 2 | ⚠️ virt/rv64 |
-| loongarch64 | 上游 Tier 3 | ⚠️ virt/max |
+- **[aris](https://github.com/celestia-island/aris)** — 基于 servo 派生的浏览器引擎
 
 ## 许可证
 
-SySL-1.0（Synthetic Source License）适用于 KEI 自身代码 —— 见 [LICENSE](../../LICENSE)。引入的 Asterinas 代码（`ostd/`、`kernel/`、`osdk/`）仍适用 MPL-2.0 —— 见 [LICENSE-MPL](../../LICENSE-MPL)。
+KEI 自身代码适用 SySL-1.0。引入的 Asterinas 代码适用 MPL-2.0。
+详见 [LICENSE](../../LICENSE) 和 [LICENSE-MPL](../../LICENSE-MPL)。

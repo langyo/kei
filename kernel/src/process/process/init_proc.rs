@@ -27,8 +27,25 @@ use crate::{
 pub fn spawn_init_process(
     executable_path: Option<&str>,
     argv: Vec<CString>,
-    envp: Vec<CString>,
+    mut envp: Vec<CString>,
 ) -> Result<Arc<Process>> {
+    // Force single-threaded operation for rayon (used by Vello CPU rendering).
+    // kei's clone/futex implementation has subtle incompatibilities with
+    // rayon's thread pool, causing TLS corruption and NULL derefs. Setting
+    // RAYON_NUM_THREADS=1 makes rayon run on the calling thread, avoiding
+    // the need for worker threads. Only inject if not already set.
+    const RAYON_VAR: &str = "RAYON_NUM_THREADS=1";
+    let has_rayon = envp.iter().any(|e| {
+        e.to_string_lossy().starts_with("RAYON_NUM_THREADS")
+    });
+    if !has_rayon {
+        envp.push(CString::new(RAYON_VAR).unwrap());
+    }
+
+    // KEI_NO_DOM: skip Blitz DOM creation (other dyn Trait dispatches in
+    // fontique/skrifa still fail even after the Blob vtable fix).
+    envp.push(CString::new("KEI_NO_DOM=1").unwrap());
+
     let process = if let Some(executable_path) = executable_path {
         create_init_process(
             executable_path,
@@ -164,7 +181,10 @@ fn create_init_task(
     // On aarch64, TPIDR_EL0 must point past the end of the TLS block.
     // Without this, any thread-local access before C library init crashes.
     if let Some(tls_ptr) = elf_load_info.tls_pointer {
+        #[cfg(target_arch = "aarch64")]
         user_ctx.set_tls_pointer(tls_ptr);
+        #[cfg(not(target_arch = "aarch64"))]
+        let _ = tls_ptr;
     }
 
     let thread_name = ThreadName::new_from_executable_path(&elf_abs_path);

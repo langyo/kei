@@ -354,6 +354,14 @@ fn map_segment_vmos(
         let map_at = relocated_range
             .relocated_addr_of(loadable_phdr.virt_range().start)
             .expect("`calc_total_vaddr_bounds()` should cover all segments");
+        ostd::early_println!(
+            "[elf] seg vaddr={:#x}-{:#x} map_at={:#x} filesz={} flags={:?}",
+            loadable_phdr.virt_range().start,
+            loadable_phdr.virt_range().end,
+            map_at,
+            loadable_phdr.file_range().len(),
+            loadable_phdr.vm_perms()
+        );
         map_segment_vmo(loadable_phdr, elf_file, vmar, map_at)?;
     }
 
@@ -637,9 +645,24 @@ fn setup_tls(vmar: &Vmar, elf_headers: &ElfHeaders) -> Option<Vaddr> {
                     &mut ostd::mm::VmWriter::from(buf.as_mut_slice()).to_fallible(),
                 )
                 .ok();
+            ostd::early_println!(
+                "[tls] .tdata copy: phdr_vaddr={:#x} filesz={} src_ok={}",
+                tls_phdr_vaddr, tls_filesz, src_reader.is_some()
+            );
             if src_reader.is_some() {
+                // Verify we actually read the .tdata (first 8 bytes)
+                let first8 = u64::from_le_bytes([
+                    buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7],
+                ]);
+                ostd::early_println!("[tls] .tdata first8 bytes = {:#x}", first8);
                 let mut r = ostd::mm::VmReader::from(buf.as_slice()).to_fallible();
                 let _ = vmar.write_alien(tls_base, &mut r);
+                // Read back to verify write
+                let mut readback = [0u8; 8];
+                let mut rb_reader = ostd::mm::VmWriter::from(readback.as_mut_slice()).to_fallible();
+                let _ = vmar.read_alien(tls_base, &mut rb_reader);
+                let rb_val = u64::from_le_bytes(readback);
+                ostd::early_println!("[tls] .tdata readback = {:#x} (match={})", rb_val, rb_val == first8);
             }
         }
 

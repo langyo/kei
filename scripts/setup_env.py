@@ -71,7 +71,7 @@ def install_cargo_osdk() -> bool:
     project_root = Path(__file__).resolve().parent.parent
     osdk_dir = project_root / "osdk"
     if not osdk_dir.exists():
-        cf.warn("osdk/ directory not found, skipping cargo-osdk install")
+        cf.warn("packages/osdk/ directory not found, skipping cargo-osdk install")
         return False
 
     nightly_bin = Path.home() / ".rustup" / "toolchains" / "nightly-2026-04-03-x86_64-unknown-linux-gnu" / "bin"

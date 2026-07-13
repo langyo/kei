@@ -95,6 +95,15 @@ def build(rootfs, outpath):
             print(f"skip {relpath}: {e}", file=sys.stderr)
             continue
         mode = st.st_mode
+        # Force executable bit on scripts and binaries — on Windows the
+        # filesystem mode doesn't carry the Unix x bit, but the guest needs it.
+        if stat.S_ISREG(mode):
+            basename = os.path.basename(relpath)
+            if basename in ("init", "render_test", "kei_ui") or basename.startswith("busybox"):
+                mode |= 0o111  # add execute permission
+        # Normalize path separators to forward slashes for the cpio archive
+        # (os.path.join uses \ on Windows, but the guest expects /).
+        relpath = relpath.replace("\\", "/")
         body = b""
         rdevmajor = 0
         rdevminor = 0

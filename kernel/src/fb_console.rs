@@ -16,8 +16,8 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 const CHAR_W: usize = 8;
 const CHAR_H: usize = 8;
-const COLS: usize = 160; // 1280/8=160 cols
-const ROWS: usize = 100; // 800/8=100 rows
+const COLS: usize = 80; // 640/8=80 cols
+const ROWS: usize = 60; // 480/8=60 rows
 
 static CURSOR_COL: AtomicUsize = AtomicUsize::new(0);
 static CURSOR_ROW: AtomicUsize = AtomicUsize::new(0);

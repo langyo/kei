@@ -122,4 +122,4 @@ just build   # Build with your BSP
 just test    # Boot in QEMU, check console output
 ```
 
-하드웨어 테스트를 위해서는 kei 커널이 포함된 aris 펌웨어를 플래시합니다.
+하드웨어 테스트를 위해서는 kei 커널을 번들한 이미지를 플래시합니다.

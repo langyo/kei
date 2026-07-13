@@ -2,7 +2,7 @@
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>面向物聯網的作業系統核心 —— 基於 Asterinas 的 RTOS 級設施，兼顧 Linux 生態接入</strong></p>
+<p align="center"><strong>面向工業物聯網的 Rust OS 核心——源自 Asterinas（星綻），附帶面向嵌入式感測器節點的 no_std 庫。</strong></p>
 
 <div align="center">
 
@@ -28,55 +28,28 @@
 
 ## 簡介
 
-KEI 是為工業物聯網打造的作業系統核心。它在 Asterinas 之上做成一套 RTOS 風格的設施——小、即時、可稽核——同時保留通往 Linux 生態的橋樑，讓既有的驅動、工具與二進位仍觸手可及。它既不是 Linux 發行版，也不是原版 Asterinas。最接近的類比是「一個恰好會說 Linux 的 RTOS」：需要即時確定性的負載得到即時確定性，其餘一切享有 Linux 級的軟體相容性。
+KEI 是面向 ARM64 和 RISC-V 邊緣設備的 Rust OS 核心。同時附帶面向 embassy 感測器節點的 `#![no_std]` 庫。
 
-## 分支模式
+KEI 源自 [Asterinas（星綻）](https://github.com/asterinas/asterinas)，一個 Rust 框架核心。KEI 在其基礎上增加了 ARM64 板級支援、virtio-gpu 顯示、工業驅動和感測器節點通訊協定。
 
-KEI **不是**追蹤上游的分支。它是一個獨立分支，按自己的節奏定期吸收上游變更 ——
-與 Apple 維護其 LLVM 分支採用相同的模式。
+## 倉庫內容
 
-```mermaid
-flowchart LR
-    UP["asterinas/asterinas\n（活躍上游）"] -->|vendor-upstream.sh\n每 N 個月壓縮一次| KEI["kei（本倉庫）\n完全獨立"]
-    WNY["wanywhn/asterinas\n（arm64-support）"] -->|pull-arm64.sh\n一次性快照| KEI
-```
-
-KEI 獨立維護 `ostd/src/arch/aarch64/`、`kernel/src/arch/aarch64/`、
-`bsp/`、`board/`、`configs/` 以及 `docs/`。
+| 組件 | 位置 | 說明 |
+|------|------|------|
+| **KEI 核心** | workspace root | ARM64/RISC-V Rust OS 核心 |
+| **kei 庫** | `packages/kei/` | 面向 embassy 的 `#![no_std]` 庫 |
 
 ## 快速開始
 
 ```bash
-just setup        # Configure git remotes
-just vendor       # Absorb latest upstream asterinas (squash)
-just pull-arm64   # Pull ARM64 code from wanywhn fork (one-time)
-just versions     # Show what upstream versions we're based on
-just build        # Build kernel for nanopi-r3s (aarch64)
-just test-all     # Boot-test all architectures in QEMU
+just build        # 構建預設板卡
+just test-all     # QEMU 啟動測試
 ```
 
-## 各目錄職責
+## 生態
 
-| 目錄 | 來源 | 維護方式 |
-|-----------|--------|-------------|
-| `ostd/` | 上游 asterinas | 定期引入，缺陷就地修復 |
-| `ostd/src/arch/aarch64/` | wanywhn 分支（PR #3270） | **獨立** —— 由我們維護 |
-| `kernel/` | 上游 asterinas | 定期引入 |
-| `kernel/src/arch/aarch64/` | wanywhn 分支（PR #3270） | **獨立** —— 由我們維護 |
-| `osdk/` | 上游 asterinas | 定期引入 |
-| `bsp/` | kei | **100% 自研** —— 板級支援包 |
-| `board/` `configs/` | kei | **100% 自研** —— 板級定義 |
-| `scripts/` `docs/` | kei | **100% 自研** —— 工具與文件 |
-
-## 支援的架構
-
-| 架構 | 狀態 | QEMU 測試 |
-|------|--------|-----------|
-| x86_64 | 上游 Tier 1 | ✅ q35 |
-| aarch64 | kei 維護（源自 PR #3270） | ✅ virt/cortex-a55 |
-| riscv64 | 上游 Tier 2 | ⚠️ virt/rv64 |
-| loongarch64 | 上游 Tier 3 | ⚠️ virt/max |
+- **[aris](https://github.com/celestia-island/aris)** — 由 servo 派生的瀏覽器引擎
 
 ## 授權條款
 
-SySL-1.0（Synthetic Source License）適用於 KEI 自身程式碼 —— 見 [LICENSE](../../LICENSE)。引入的 Asterinas 程式碼（`ostd/`、`kernel/`、`osdk/`）仍適用 MPL-2.0 —— 見 [LICENSE-MPL](../../LICENSE-MPL)。
+KEI 自身程式碼適用 SySL-1.0。引入的 Asterinas 程式碼適用 MPL-2.0。

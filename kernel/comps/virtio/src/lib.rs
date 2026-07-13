@@ -75,8 +75,12 @@ fn virtio_component_init_inner() -> Result<(), ComponentInitError> {
     // On aarch64, the IoMem KVirtArea mapping doesn't work without the
     // kernel page table switch. Instead, manually probe each MMIO device
     // using raw volatile reads through the linear mapping.
+    // Set to false to A/B-test the asterinas GpuDevice::init (DmaCoherent)
+    // path instead of the raw .bss-backed probe.
     #[cfg(target_arch = "aarch64")]
-    {
+    const RAW_GPU_PROBE_ENABLED: bool = true;
+    #[cfg(target_arch = "aarch64")]
+    if RAW_GPU_PROBE_ENABLED {
         crate::aarch64_raw_gpu_probe::probe();
     }
 
@@ -84,6 +88,32 @@ fn virtio_component_init_inner() -> Result<(), ComponentInitError> {
     while let Some(mut transport) = pop_device_transport() {
         dev_idx += 1;
         ostd::early_println!("[virtio] processing device #{}", dev_idx);
+
+        // The device type can be read from the device-id register before any
+        // reset, so check it first.
+        let device_type = transport.device_type();
+        ostd::early_println!("[virtio] dev #{}: type={:?}", dev_idx, device_type);
+
+        // On aarch64, the raw MMIO GPU probe (aarch64_raw_gpu_probe) runs
+        // before this loop and has already configured the virtio-gpu: it
+        // created the 2D resource, attached the framebuffer backing, and bound
+        // the scanout. The reset below (write_device_status(empty)) would
+        // discard all of that and leave the display blank — which was the root
+        // cause of the "black scanout" previously blamed on a QEMU TCG
+        // used-ring bug. When the raw probe succeeded, drop this transport
+        // without touching the device so the display stays live.
+        #[cfg(target_arch = "aarch64")]
+        if matches!(device_type, VirtioDeviceType::Gpu)
+            && crate::aarch64_raw_gpu_probe::is_ready()
+        {
+            ostd::early_println!(
+                "[virtio] dev #{}: GPU already claimed by raw probe, skipping reset",
+                dev_idx
+            );
+            drop(transport);
+            continue;
+        }
+
         // Reset device
         ostd::early_println!("[virtio] dev #{}: resetting...", dev_idx);
         transport
@@ -107,9 +137,7 @@ fn virtio_component_init_inner() -> Result<(), ComponentInitError> {
             transport.write_device_status(status).unwrap();
         }
 
-        let device_type = transport.device_type();
-        ostd::early_println!("[virtio] dev #{}: type={:?}", dev_idx, device_type);
-        let res = match transport.device_type() {
+        let res = match device_type {
             VirtioDeviceType::Block => BlockDevice::init(transport),
             VirtioDeviceType::Console => ConsoleDevice::init(transport),
             VirtioDeviceType::Entropy => EntropyDevice::init(transport),

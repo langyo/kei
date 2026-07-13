@@ -51,6 +51,13 @@ pub fn all_devices_lock<'a>()
     COMPONENT.get().unwrap().console_device_table.lock()
 }
 
+/// Returns the console component if initialized, or None.
+/// Use this instead of all_devices_lock when the component might not be
+/// initialized yet (e.g., during early boot on aarch64).
+pub fn component() -> Option<&'static Component> {
+    COMPONENT.get()
+}
+
 static COMPONENT: Once<Component> = Once::new();
 
 #[init_component]
@@ -69,8 +76,8 @@ pub fn init_component_fn() -> Result<(), ComponentInitError> {
 }
 
 #[derive(Debug)]
-struct Component {
-    console_device_table: SpinLock<BTreeMap<String, Arc<dyn AnyConsoleDevice>>, LocalIrqDisabled>,
+pub struct Component {
+    pub console_device_table: SpinLock<BTreeMap<String, Arc<dyn AnyConsoleDevice>>, LocalIrqDisabled>,
 }
 
 impl Component {

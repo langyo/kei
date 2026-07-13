@@ -509,6 +509,11 @@ impl VmMapping {
                     let map_prop = PageProperty::new_user(page_flags, CachePolicy::Writeback);
 
                     cursor.map(frame, map_prop);
+                    // WORKAROUND: ensure the new mapping is visible to user-space.
+                    // The memtest diagnostic shows user-space mmap stores do not
+                    // persist. Force a barrier via the cursor's own flusher.
+                    cursor.flusher().dispatch_tlb_flush();
+                    cursor.flusher().sync_tlb_flush();
                     rss_delta.add(self.rss_type(), 1);
                 }
             }
@@ -529,7 +534,8 @@ impl VmMapping {
             MappedMemory::Vmo(vmo) => vmo,
             MappedMemory::Anonymous => {
                 // Anonymous mapping. Allocate a new frame.
-                return Ok((FrameAllocOptions::new().alloc_frame()?.into(), is_readonly));
+                let frame: UFrame = FrameAllocOptions::new().alloc_frame()?.into();
+                return Ok((frame, is_readonly));
             }
             MappedMemory::Device => {
                 // Device memory is populated when the memory mapping is created.

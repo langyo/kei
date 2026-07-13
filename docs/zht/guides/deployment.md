@@ -2,9 +2,8 @@
 
 ## 概述
 
-kei 生成 `kei-kernel.bin` — [aris](https://github.com/celestia-island/aris)
-所使用的 ARM64 支援的 Asterinas 核心。本指南涵蓋核心的建置、QEMU 測試以及
-部署到實體硬體。
+kei 生成 `kei-kernel.bin` — ARM64 支援的 Asterinas 核心。本指南涵蓋核心的
+建置、QEMU 測試以及部署到實體硬體。
 
 ## 建置管線
 
@@ -13,8 +12,7 @@ flowchart LR
     SRC["Source\nostd/ kernel/ bsp/"] -->|"cargo build\n(aarch64)"| BIN["kei-kernel.bin"]
     BIN --> QEMU["QEMU Test\n(virt/cortex-a55)"]
     QEMU -->|passes| PACK["Package\n(DTB + initramfs)"]
-    PACK --> ARIS["aris firmware\n(image.img)"]
-    ARIS --> FLASH["Flash SD card"]
+    PACK --> FLASH["Flash SD card"]
     FLASH --> BOARD["NanoPi R3S"]
 ```
 
@@ -33,7 +31,6 @@ just setup        # Configure git remotes and Rust targets
 
 # Sync upstream sources
 just vendor       # Absorb latest upstream asterinas (squash)
-just pull-arm64   # Pull ARM64 code from wanywhn fork (one-time)
 just versions     # Show upstream baseline versions
 
 # Build for the NanoPi R3S
@@ -131,7 +128,6 @@ flowchart TB
 
 ```bash
 # Build the complete firmware image (includes kei-kernel.bin)
-# Run from aris repository — aris packages kei as a submodule/dependency
 just build-board nanopi-r3s
 
 # Flash to SD card
@@ -161,8 +157,6 @@ kei-kernel booting...
 [KEI] starting SMP...
 [KEI] 4 cores online
 ...
-aris-core v0.1.0 starting...
-evernight daemon starting...
 ```
 
 ### 啟動順序
@@ -172,41 +166,7 @@ flowchart TB
     ROM["Mask ROM"] --> SPL["U-Boot SPL"]
     SPL --> TPL["U-Boot Proper"]
     TPL -->|"load kernel + DTB\nfrom mmc"| KEI["kei-kernel.bin"]
-    KEI -->|"Transfer to EL1"| INIT["initramfs\naris-core (PID 1)"]
-    INIT --> EVN["evernight daemon"]
-    EVN -->|"WebSocket TLS"| ENT["entelecheia"]
-```
-
-## 與 aris 整合
-
-kei 提供核心二進位檔案；aris 將其打包為可啟動的映像檔：
-
-```
-aris repository                     kei repository
-─────────────────                   ─────────────────
-packages/core/        supervisor    kernel/          kernel source
-packages/builder/     image builder ostd/            core infra
-overlay/              rootfs files  bsp/             board support
-scripts/              build + flash board/           board configs
-│                                    │
-│  just build-board                  │  just build
-│    ├── cross-compile aris-core     │    └── cargo build (aarch64)
-│    ├── fetch kei-kernel.bin        │
-│    ├── assemble image.img          │
-│    └── just flash-sd /dev/sdX      │
-```
-
-驗證整合：
-
-```bash
-# In aris repo: build with kei kernel
-just build-board nanopi-r3s
-
-# Boot in QEMU with the full image
-just test-qemu
-
-# Verify kei kernel version in boot log
-grep "kei-kernel" output/boot.log
+    KEI -->|"Transfer to EL1"| INIT["kei init\n(使用者空間)"]
 ```
 
 ## 故障排除
@@ -216,6 +176,5 @@ grep "kei-kernel" output/boot.log
 | 無序列埠輸出 | 鮑率錯誤 | 使用 1500000，而非 115200 |
 | GICv3 初始化失敗 | QEMU 機器類型 | 使用 `virt,gic-version=3` |
 | SMP 失敗 | DTB 中缺少 PSCI | 檢查裝置樹中的 `/cpus` 節點 |
-| Kernel panic | LLM 生成的程式碼工件 | 審計 `ostd/src/arch/aarch64/` |
+| Kernel panic | 架構層程式碼缺陷 | 審計 `ostd/src/arch/aarch64/` |
 | U-Boot 找不到核心 | 分割區偏移錯誤 | 檢查 `boot.scr` 中的偏移量 |
-| evernight 無法連線 | 網路未設定 | 檢查 `/data/network.toml` |

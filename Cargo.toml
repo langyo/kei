@@ -10,21 +10,21 @@ resolver = "2"
 # These crates share a single workspace
 # so their `Cargo.toml` files do not need to repeat common settings.
 members = [
-    "osdk/deps/frame-allocator",
-    "osdk/deps/heap-allocator",
-    "osdk/deps/test-kernel",
-    "ostd",
-    "ostd/libs/align_ext",
-    "ostd/libs/id-alloc",
-    "ostd/libs/int-to-c-enum",
-    "ostd/libs/int-to-c-enum/derive",
-    "ostd/libs/linux-bzimage/boot-params",
-    "ostd/libs/linux-bzimage/builder",
-    "ostd/libs/ostd-pod",
-    "ostd/libs/ostd-pod/macros",
-    "ostd/libs/ostd-macros",
-    "ostd/libs/ostd-test",
-    "ostd/libs/padding-struct",
+    "packages/osdk/deps/frame-allocator",
+    "packages/osdk/deps/heap-allocator",
+    "packages/osdk/deps/test-kernel",
+    "packages/ostd",
+    "packages/ostd/libs/align_ext",
+    "packages/ostd/libs/id-alloc",
+    "packages/ostd/libs/int-to-c-enum",
+    "packages/ostd/libs/int-to-c-enum/derive",
+    "packages/ostd/libs/linux-bzimage/boot-params",
+    "packages/ostd/libs/linux-bzimage/builder",
+    "packages/ostd/libs/ostd-pod",
+    "packages/ostd/libs/ostd-pod/macros",
+    "packages/ostd/libs/ostd-macros",
+    "packages/ostd/libs/ostd-test",
+    "packages/ostd/libs/padding-struct",
     "kernel",
     "kernel/comps/block",
     "kernel/comps/cmdline",
@@ -59,9 +59,9 @@ members = [
     "kernel/libs/typeflags-util",
     "kernel/libs/xarray",
     # ── kei additions: Board Support Packages ──
-    "bsp/rk3566",
-    "bsp/bcm2711",
-    "bsp/jh7110",
+    "packages/bsp/rk3566",
+    "packages/bsp/bcm2711",
+    "packages/bsp/jh7110",
 ]
 # All OSDK-based in-kernel crates.
 #
@@ -72,10 +72,10 @@ members = [
 # such as only compiling on specific architectures
 # or relying on its own Cargo configuration.
 default-members = [
-    "osdk/deps/frame-allocator",
-    "osdk/deps/heap-allocator",
-    "osdk/deps/test-kernel",
-    "ostd",
+    "packages/osdk/deps/frame-allocator",
+    "packages/osdk/deps/heap-allocator",
+    "packages/osdk/deps/test-kernel",
+    "packages/ostd",
     "kernel",
     "kernel/comps/block",
     "kernel/comps/cmdline",
@@ -111,12 +111,14 @@ exclude = [
     "kernel/libs/comp-sys/component",
     "kernel/libs/comp-sys/component-macro",
     "kernel/libs/comp-sys/controlled",
-    "ostd/libs/linux-bzimage/setup",
-    "osdk",
-    "tools/sctrace",
+    "packages/ostd/libs/linux-bzimage/setup",
+    "packages/osdk",
+    "scripts/tools/sctrace",
     # The no_std bridge library + QEMU demo are separate workspaces
     # (different target: thumbv7em-none-eabi, not aarch64-unknown-none).
     "packages/kei",
+    # NixOS test template uses a placeholder package name; not a real crate.
+    "tests/nixos/common/template",
 ]
 
 [workspace.lints.rust]
@@ -142,16 +144,16 @@ license = "MPL-2.0"
 edition = "2024"
 
 [workspace.dependencies]
-ostd = { version = "0.18.0", path = "ostd" }
+ostd = { version = "0.18.0", path = "packages/ostd" }
 
 # Crates under ostd/libs
-align_ext = { path = "ostd/libs/align_ext", version = "0.1.0" }
-id-alloc = { path = "ostd/libs/id-alloc", version = "0.1.0" }
-int-to-c-enum = { path = "ostd/libs/int-to-c-enum", version = "0.1.0" }
-linux-boot-params = { version = "0.18.0", path = "ostd/libs/linux-bzimage/boot-params" }
-ostd-macros = { version = "0.18.0", path = "ostd/libs/ostd-macros" }
-ostd-pod = { path = "ostd/libs/ostd-pod", version = "0.4.0" }
-ostd-test = { version = "0.18.0", path = "ostd/libs/ostd-test" }
+align_ext = { path = "packages/ostd/libs/align_ext", version = "0.1.0" }
+id-alloc = { path = "packages/ostd/libs/id-alloc", version = "0.1.0" }
+int-to-c-enum = { path = "packages/ostd/libs/int-to-c-enum", version = "0.1.0" }
+linux-boot-params = { version = "0.18.0", path = "packages/ostd/libs/linux-bzimage/boot-params" }
+ostd-macros = { version = "0.18.0", path = "packages/ostd/libs/ostd-macros" }
+ostd-pod = { path = "packages/ostd/libs/ostd-pod", version = "0.4.0" }
+ostd-test = { version = "0.18.0", path = "packages/ostd/libs/ostd-test" }
 
 # Crates under kernel/comps
 aster-block = { path = "kernel/comps/block" }
@@ -194,8 +196,8 @@ component = { path = "kernel/libs/comp-sys/component" }
 controlled = { path = "kernel/libs/comp-sys/controlled" }
 
 # Crates under osdk/deps
-osdk-frame-allocator = { path = "osdk/deps/frame-allocator" }
-osdk-heap-allocator = { path = "osdk/deps/heap-allocator" }
+osdk-frame-allocator = { path = "packages/osdk/deps/frame-allocator" }
+osdk-heap-allocator = { path = "packages/osdk/deps/heap-allocator" }
 
 # External dependencies only for unsafe crates (i.e., crates under ostd directory)
 bit_field = "0.10.1"
@@ -293,7 +295,7 @@ codegen-units = 1
 # Without this, some transitive dependencies pull ostd from crates.io,
 # which lacks aarch64 support and causes duplicate compilation.
 [patch.crates-io]
-ostd = { path = "ostd" }
-ostd-pod = { path = "ostd/libs/ostd-pod" }
-ostd-macros = { path = "ostd/libs/ostd-macros" }
-ostd-test = { path = "ostd/libs/ostd-test" }
+ostd = { path = "packages/ostd" }
+ostd-pod = { path = "packages/ostd/libs/ostd-pod" }
+ostd-macros = { path = "packages/ostd/libs/ostd-macros" }
+ostd-test = { path = "packages/ostd/libs/ostd-test" }

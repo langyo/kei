@@ -5,7 +5,7 @@ use aster_framebuffer::{
     pixel::PixelFormat,
 };
 use device_id::{DeviceId, MajorId, MinorId};
-use ostd::mm::{HasPaddr, HasSize, VmIo, VmReader, VmWriter};
+use ostd::mm::{FallibleVmRead, HasPaddr, HasSize, VmIo, VmReader, VmWriter};
 
 use super::{Device, DeviceType, DevtmpfsInodeMeta, registry::char};
 use crate::{
@@ -26,6 +26,9 @@ struct Fb;
 #[derive(Debug)]
 struct FbHandle {
     framebuffer: Arc<FrameBuffer>,
+    /// Cached IoMem for the DMA buffer (Blit backends only). Acquired once
+    /// on open() and reused for all subsequent write_at calls.
+    cached_iomem: Option<ostd::io::IoMem>,
 }
 
 /// Bitfields describing the color channel layout; `struct fb_bitfield` in Linux.
@@ -243,7 +246,17 @@ impl Device for Fb {
                 "the framebuffer device is not present",
             ));
         };
-        Ok(Box::new(FbHandle { framebuffer }))
+
+        // Note: we intentionally do NOT acquire an IoMem for Blit-backed
+        // framebuffers here. The IoMem kvirt_area path triggers an EL1 page
+        // fault on aarch64 QEMU TCG after repeated writes (see write_at).
+        // Instead, write_at uses the BlitBackend's linear-mapped VA directly.
+        let cached_iomem: Option<ostd::io::IoMem> = None;
+
+        Ok(Box::new(FbHandle {
+            framebuffer,
+            cached_iomem,
+        }))
     }
 }
 
@@ -496,8 +509,15 @@ impl FileOps for FbHandle {
         }
 
         // For Mmio-backed framebuffers, use the fallible VmIo path. For Blit
-        // backends, copy via a stack buffer then push to the backing DMA
-        // region (and flush so the host scanout updates).
+        // backends, write directly to the linear-mapped DMA buffer VA.
+        //
+        // On aarch64 QEMU TCG, the IoMem kvirt_area path triggers an EL1 page
+        // fault (ESR=0x96000041) after repeated write() syscalls, because the
+        // dynamically-allocated KVirtArea mapping for the fb DMA buffer becomes
+        // invalid. The BlitBackend.base address (LINEAR_BASE + 0x60000000) uses
+        // the fixed-PA linear mapping that is verified stable (PLAN.md).
+        // So for Blit backends we bypass IoMem entirely and copy from the
+        // userspace reader cursor directly into the fb VA.
         if let Some(io_mem) = self.framebuffer.io_mem() {
             let mut new_reader = reader.clone();
             new_reader.limit(len);
@@ -515,21 +535,42 @@ impl FileOps for FbHandle {
             reader.skip(copied);
             Ok(copied)
         } else {
-            let mut buf = vec![0u8; len];
-            let remain = reader.remain().min(buf.len());
-            // Copy userspace reader into kernel buffer. VmReader does not
-            // implement VmIo, so we use a direct cursor-based copy.
-            // SAFETY: reader.cursor() points to a valid userspace buffer of
-            // at least `remain` bytes for the duration of this call.
-            #[allow(unsafe_code)]
-            unsafe {
-                core::ptr::copy_nonoverlapping(reader.cursor(), buf.as_mut_ptr(), remain);
+            // Blit-backed framebuffer: copy userspace bytes to the DMA buffer
+            // via the stable linear mapping. Use a small stack buffer copied
+            // through the VmReader/VmWriter API (which handles user/kernel
+            // access correctly).
+            //
+            // We deliberately do NOT call flush_all() here. The flush path
+            // (flush_framebuffer) hits a deterministic ostd page-table bug after
+            // ~7 invocations under repeated write() syscalls, crashing the kernel.
+            // The raw-probe initial fill already pushed a test pattern; the
+            // framebuffer console's own flush path (or kei_desktop's single
+            // explicit ioctl-triggered flush) will make new pixels visible.
+            const CHUNK: usize = 4096;
+            let mut total = 0;
+            let mut off = offset;
+            while total < len {
+                let n = (len - total).min(CHUNK);
+                let mut buf = [0u8; CHUNK];
+                // Use the fallible read API: the reader is a user-space
+                // Fallible VmReader, and we read into a kernel Fallible writer
+                // wrapping our stack buffer. read_fallible returns
+                // Ok(copied) or Err((err, copied)).
+                let mut writer = VmWriter::from(&mut buf[..n]).to_fallible();
+                let copied = match reader.read_fallible(&mut writer) {
+                    Ok(c) => c,
+                    Err((_, c)) => c,
+                };
+                if copied == 0 {
+                    break;
+                }
+                self.framebuffer.write_bytes_at(off, &buf[..copied])?;
+                total += copied;
+                off += copied;
             }
-            reader.skip(remain);
-            self.framebuffer.write_bytes_at(offset, &buf[..remain])?;
-            // Push the dirty region to the host scanout for blit-backed FBs.
-            self.framebuffer.flush_all();
-            Ok(remain)
+            // No flush here — kei_desktop triggers a single flush via
+            // FBIOPAN_DISPLAY ioctl after writing the full frame.
+            Ok(total)
         }
     }
 }
@@ -598,9 +639,18 @@ impl PerOpenFileOps for FbHandle {
                 self.handle_set_cmap(&cmd.read()?)?;
                 Ok(0)
             }
-            PanDisplay | Blank => {
-                // These commands are not supported by efifb.
-                // We return errors according to the Linux behavior.
+            PanDisplay => {
+                // Hijack FBIOPAN_DISPLAY as an explicit "flush the framebuffer
+                // to the scanout" trigger for Blit-backed devices. The normal
+                // write_at path does NOT flush (to avoid the ostd page-table
+                // crash under repeated flushes). kei_desktop calls this once
+                // after writing the full frame to make all pixels visible in a
+                // single virtio-gpu TRANSFER_TO_HOST_2D + RESOURCE_FLUSH.
+                self.framebuffer.flush_all();
+                Ok(0)
+            }
+            Blank => {
+                // Not supported by efifb.
                 return_errno_with_message!(
                     Errno::EINVAL,
                     "the ioctl command is not supported by efifb devices"
@@ -631,6 +681,6 @@ pub(super) fn init_in_first_kthread() {
 /// Called by the virtio-gpu driver once `framebuffer::publish` has installed
 /// a `FrameBuffer`. Idempotent: the char device registration is a no-op if
 /// already registered (the `Fb` device is stateless).
-pub(super) fn register_late() {
+pub fn register_late() {
     char::register(Arc::new(Fb)).expect("failed to register framebuffer char device");
 }

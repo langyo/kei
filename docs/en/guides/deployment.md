@@ -2,9 +2,8 @@
 
 ## Overview
 
-kei produces `kei-kernel.bin` — the ARM64-enabled Asterinas kernel consumed by
-[aris](https://github.com/celestia-island/aris). This guide covers building the
-kernel, testing in QEMU, and deploying to physical hardware.
+kei produces `kei-kernel.bin` — the ARM64-enabled Asterinas kernel. This guide
+covers building the kernel, testing in QEMU, and deploying to physical hardware.
 
 ## Build Pipeline
 
@@ -13,8 +12,7 @@ flowchart LR
     SRC["Source\nostd/ kernel/ bsp/"] -->|"cargo build\n(aarch64)"| BIN["kei-kernel.bin"]
     BIN --> QEMU["QEMU Test\n(virt/cortex-a55)"]
     QEMU -->|passes| PACK["Package\n(DTB + initramfs)"]
-    PACK --> ARIS["aris firmware\n(image.img)"]
-    ARIS --> FLASH["Flash SD card"]
+    PACK --> FLASH["Flash SD card"]
     FLASH --> BOARD["NanoPi R3S"]
 ```
 
@@ -32,8 +30,7 @@ flowchart LR
 just setup        # Configure git remotes and Rust targets
 
 # Sync upstream sources
-just vendor       # Absorb latest upstream asterinas (squash)
-just pull-arm64   # Pull ARM64 code from wanywhn fork (one-time)
+just vendor       # Absorb latest upstream asterinas
 just versions     # Show upstream baseline versions
 
 # Build for the NanoPi R3S
@@ -131,7 +128,6 @@ flowchart TB
 
 ```bash
 # Build the complete firmware image (includes kei-kernel.bin)
-# Run from aris repository — aris packages kei as a submodule/dependency
 just build-board nanopi-r3s
 
 # Flash to SD card
@@ -162,8 +158,6 @@ kei-kernel booting...
 [KEI] starting SMP...
 [KEI] 4 cores online
 ...
-aris-core v0.1.0 starting...
-evernight daemon starting...
 ```
 
 ### Boot Order
@@ -173,41 +167,7 @@ flowchart TB
     ROM["Mask ROM"] --> SPL["U-Boot SPL"]
     SPL --> TPL["U-Boot Proper"]
     TPL -->|"load kernel + DTB\nfrom mmc"| KEI["kei-kernel.bin"]
-    KEI -->|"Transfer to EL1"| INIT["initramfs\naris-core (PID 1)"]
-    INIT --> EVN["evernight daemon"]
-    EVN -->|"WebSocket TLS"| ENT["entelecheia"]
-```
-
-## Integration with aris
-
-kei delivers the kernel binary; aris packages it into a bootable image:
-
-```
-aris repository                     kei repository
-─────────────────                   ─────────────────
-packages/core/        supervisor    kernel/          kernel source
-packages/builder/     image builder ostd/            core infra
-overlay/              rootfs files  bsp/             board support
-scripts/              build + flash board/           board configs
-│                                    │
-│  just build-board                  │  just build
-│    ├── cross-compile aris-core     │    └── cargo build (aarch64)
-│    ├── fetch kei-kernel.bin        │
-│    ├── assemble image.img          │
-│    └── just flash-sd /dev/sdX      │
-```
-
-Validate the integration:
-
-```bash
-# In aris repo: build with kei kernel
-just build-board nanopi-r3s
-
-# Boot in QEMU with the full image
-just test-qemu
-
-# Verify kei kernel version in boot log
-grep "kei-kernel" output/boot.log
+    KEI -->|"Transfer to EL1"| INIT["kei init\n(user space)"]
 ```
 
 ## Troubleshooting
@@ -217,6 +177,5 @@ grep "kei-kernel" output/boot.log
 | No serial output | Wrong baud rate | Use 1500000, not 115200 |
 | GICv3 init failed | QEMU machine type | Use `virt,gic-version=3` |
 | SMP failed | Missing PSCI in DTB | Check `/cpus` node in device tree |
-| Kernel panic | LLM-generated code artifact | Audit `ostd/src/arch/aarch64/` |
+| Kernel panic | Code bug in arch layer | Audit `ostd/src/arch/aarch64/` |
 | U-Boot can't find kernel | Wrong partition offset | Verify offset in `boot.scr` |
-| evernight can't connect | Network not configured | Check `/data/network.toml` |

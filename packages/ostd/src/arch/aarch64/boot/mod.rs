@@ -125,15 +125,17 @@ unsafe extern "C" fn aarch64_boot(fdt_paddr: usize) -> ! {
     let fdt_paddr = if fdt_paddr == 0 {
         const FDT_MAGIC: u32 = 0xD00DFEED;
         let ram_base = 0x4000_0000usize;
-        // Scan RAM for the FDT magic. QEMU places the DTB near the top of RAM.
-        // For 2G RAM (base 0x40000000, top 0xC0000000), the DTB is typically
-        // at ~0xBFF00000. Scan from 0xC0000000 down to 0x80000000 (1 GiB range).
+        // Scan RAM for the FDT magic. QEMU places the DTB near the top of RAM
+        // (just below the top-of-RAM, after the initrd). For a 2G guest
+        // (base 0x40000000, top 0xC0000000), the DTB sits a few hundred KB
+        // below the top. Scan the full low-RAM range downward so we find it
+        // regardless of exact placement, but start near the top (fast path).
         let scan_top = 0xBFFF_F000usize;
-        let scan_bottom = 0x8000_0000usize;
+        let scan_bottom = ram_base + 0x0020_0000; // skip the first 2 MiB (kernel image)
         let page_size = 4096usize;
         let mut found = 0usize;
         let mut addr = scan_top;
-        while addr >= ram_base {
+        loop {
             let ptr = paddr_to_vaddr(addr) as *const u32;
             let val = unsafe { core::ptr::read_volatile(ptr) };
             if val.to_le() == FDT_MAGIC {
@@ -146,7 +148,7 @@ unsafe extern "C" fn aarch64_boot(fdt_paddr: usize) -> ! {
                     break;
                 }
             }
-            if addr < scan_bottom {
+            if addr <= scan_bottom {
                 break;
             }
             addr -= page_size;

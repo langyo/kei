@@ -261,7 +261,7 @@ pub fn tdx_get_quote(inblob: &[u8]) -> Result<Box<[u8]>> {
 
     // FIXME: The `get_quote` API from the `tdx_guest` crate should have been marked `unsafe`
     // because it has no way to determine if the input physical address is safe or not.
-    tdvmcall::get_quote((buf.paddr() as u64) | SHARED_MASK, buf.size() as u64)?;
+    tdvmcall::get_quote((buf.paddr() as u64) | (1u64 << 51), buf.size() as u64)?;
 
     // Poll for the quote to be ready.
     let status_ptr = field_ptr!(&header_ptr, TdxQuoteHdr, status);

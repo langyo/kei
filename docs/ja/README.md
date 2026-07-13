@@ -2,7 +2,7 @@
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>IoT 向け OS カーネル — Asterinas 上の RTOS 規律、Linux エコシステムへのアクセス付き</strong></p>
+<p align="center"><strong>産業用 IoT 向け Rust OS カーネル — Asterinas（星绽）由来、組み込みセンサーノード向け no_std ライブラリ付き。</strong></p>
 
 <div align="center">
 
@@ -26,57 +26,30 @@
 
 </div>
 
-## はじめに
+## 概要
 
-KEI は産業用 IoT のために専用構築された OS カーネルです。[asterinas/asterinas](https://github.com/asterinas/asterinas) を取り込み、それを RTOS 風の施設へと形作ります —— 小さく、リアルタイムで、監査可能 —— 一方で Linux エコシステムへの橋を保ち、既存のドライバ、ツール、バイナリが手の届く範囲に残るようにします。Linux ディストリビューションでも、ストックの Asterinas でもありません。最も近い類似物は、たまたま Linux を話す RTOS です。必要なワークロードにはリアルタイムの決定性を、それ以外のすべてには Linux グレードのソフトウェア互換性を提供します。
+KEI は ARM64 および RISC-V エッジデバイス向けの Rust OS カーネルです。embassy センサーノード向けの `#![no_std]` ライブラリも同梱しています。
 
-## フォークモデル
+KEI は [Asterinas（星绽）](https://github.com/asterinas/asterinas) から派生した Rust フレームカーネルです。
 
-KEI は上流を追跡するブランチでは**ありません**。独立したフォークであり、独自のスケジュールで
-定期的に上流の変更を取り込みます —— Apple が自社の LLVM フォークで採用しているモデルと同じです。
+## リポジトリ内容
 
-```mermaid
-flowchart LR
-    UP["asterinas/asterinas\n（活発な上流）"] -->|vendor-upstream.sh\n数ヶ月ごとにスカッシュ| KEI["kei（本リポジトリ）\n完全に独立"]
-    WNY["wanywhn/asterinas\n（arm64-support）"] -->|pull-arm64.sh\n一回限りのスナップショット| KEI
-```
-
-KEI は `ostd/src/arch/aarch64/`、`kernel/src/arch/aarch64/`、
-`bsp/`、`board/`、`configs/`、`docs/` を独自に保守しています。
+| コンポーネント | 場所 | 説明 |
+|---------------|------|------|
+| **KEI カーネル** | workspace root | ARM64/RISC-V Rust OS カーネル |
+| **kei ライブラリ** | `packages/kei/` | embassy 向け `#![no_std]` ライブラリ |
 
 ## クイックスタート
 
 ```bash
-just setup        # Configure git remotes
-just vendor       # Absorb latest upstream asterinas (squash)
-just pull-arm64   # Pull ARM64 code from wanywhn fork (one-time)
-just versions     # Show what upstream versions we're based on
-just build        # Build kernel for nanopi-r3s (aarch64)
-just test-all     # Boot-test all architectures in QEMU
+just build        # デフォルトボード向けビルド
+just test-all     # QEMU ブートテスト
 ```
 
-## 各ディレクトリの役割
+## エコシステム
 
-| ディレクトリ | 由来 | 保守 |
-|-----------|--------|-------------|
-| `ostd/` | 上流 asterinas | 定期的にベンダー取り込み、バグはその場で修正 |
-| `ostd/src/arch/aarch64/` | wanywhn フォーク（PR #3270） | **独立** —— 私たちが管理 |
-| `kernel/` | 上流 asterinas | 定期的にベンダー取り込み |
-| `kernel/src/arch/aarch64/` | wanywhn フォーク（PR #3270） | **独立** —— 私たちが管理 |
-| `osdk/` | 上流 asterinas | 定期的にベンダー取り込み |
-| `bsp/` | kei | **100% 自作** —— ボードサポートパッケージ |
-| `board/` `configs/` | kei | **100% 自作** —— ボード定義 |
-| `scripts/` `docs/` | kei | **100% 自作** —— ツールとドキュメント |
-
-## サポートするアーキテクチャ
-
-| アーキテクチャ | 状態 | QEMU テスト |
-|------|--------|-----------|
-| x86_64 | 上流 Tier 1 | ✅ q35 |
-| aarch64 | kei 保守（PR #3270 由来） | ✅ virt/cortex-a55 |
-| riscv64 | 上流 Tier 2 | ⚠️ virt/rv64 |
-| loongarch64 | 上流 Tier 3 | ⚠️ virt/max |
+- **[aris](https://github.com/celestia-island/aris)** — servo 派生のブラウザエンジン
 
 ## ライセンス
 
-SySL-1.0（Synthetic Source License）が KEI 自身のコードに適用されます —— [LICENSE](../../LICENSE) を参照。ベンダー取り込みの Asterinas コード（`ostd/`、`kernel/`、`osdk/`）は MPL-2.0 のままです —— [LICENSE-MPL](../../LICENSE-MPL) を参照。
+KEI 独自コードは SySL-1.0。導入 Asterinas コードは MPL-2.0。

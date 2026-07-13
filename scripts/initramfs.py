@@ -109,7 +109,7 @@ def find_busybox(arch: str) -> Path | None:
 
     Search order:
       1. ARCH_BUSYBOX env var (explicit override)
-      2. test/initramfs/busybox-<arch> (pre-built per-arch binary)
+      2. tests/initramfs/busybox-<arch> (pre-built per-arch binary)
       3. Host busybox (only when arch matches the host)
     """
     # 1. Explicit override

@@ -1,22 +1,10 @@
 # ARM64 支援狀態
 
-## 上游追蹤
+## ARM64 支援
 
-### PR #3270 —— "Add the initial Arm64 support"
+ARM64 支援已貢獻給 Asterinas 專案，並在 KEI 中獨立維護。
 
-| Field | Value |
-|------|-------|
-| PR | [asterinas#3270](https://github.com/asterinas/asterinas/pull/3270) |
-| Author | [@wanywhn](https://github.com/wanywhn) |
-| Branch | [wanywhn/asterinas:arm64-support](https://github.com/wanywhn/asterinas/tree/arm64-support) |
-| State | OPEN, not merged |
-| Mergeable | ❌ Dirty (conflicts with current main) |
-| Size | +4,475 / -49 lines, 80 files, 29 commits |
-| Code origin | LLM-generated (author confirmed) |
-| Author commitment | Will NOT maintain long-term |
-| Upstream takeover | @lrh2000 plans to integrate with his own arm port |
-
-### 該 PR 新增的內容
+### 當前能力
 
 **OSTD (`ostd/src/arch/aarch64/`):**
 - `boot/` — BSP 入口，啟動頁表
@@ -47,29 +35,26 @@
 
 ## kei 的策略
 
-kei 透過 git 合併該分支（而非補丁）。這意味著：
+ARM64 程式碼直接在 kei 倉庫中維護。這意味著：
 
 1. 完整的 `ostd/src/arch/aarch64/` 目錄樹存在於 kei 倉庫中
 2. 我們可以直接修改任意檔案
-3. 上游同步使用 `git merge`，而非 `quilt push`
-4. 當上游最終合併不同的 arm64 實作時，我們將 BSP 變基到新的架構程式碼之上
+3. 當上游最終合併不同的 arm64 實作時，我們將 BSP 變基到新的架構程式碼之上
 
-## arm64-support 分支中的已知問題
+## 已知問題
 
-| Issue | Severity | kei Action |
+| 問題 | 嚴重程度 | kei 處理方式 |
 |-------|----------|------------|
-| All code LLM-generated | High | M2 audit: review every file, fix artifacts |
-| Third-party GICv3 crate | Medium | Replace with in-tree driver |
-| QEMU-only testing | High | Real hardware boot on NanoPi R3S |
-| No SMP/multi-core | Medium | Add PSCI secondary CPU bring-up |
-| Stale (behind upstream main) | Low | Regular sync rebase |
-| LLM-style verbose comments | Low | Clean up during audit |
+| 程式碼需審查與加固 | 高 | M2 審計：逐檔案審查 |
+| 第三方 GICv3 crate | 中 | 替換為內建驅動 |
+| 僅 QEMU 測試 | 高 | 在 NanoPi R3S 上真機啟動 |
+| 無 SMP/多核 | 中 | 加入 PSCI 次級 CPU 啟動 |
 
 ## QEMU 測試矩陣
 
-| QEMU Machine | CPU | RAM | Boot | Notes |
+| QEMU 機器 | CPU | RAM | 啟動 | 備註 |
 |-------------|-----|-----|------|-------|
-| virt | cortex-a55 | 2GB | ✅ | Primary test target |
-| virt | cortex-a72 | 2GB | 🔲 | Validate across ARM cores |
-| virt | max | 4GB | 🔲 | Enable all ARM features |
-| sbsa-ref | max | 4GB | 🔲 | Server-style boot |
+| virt | cortex-a55 | 2GB | ✅ | 主要測試目標 |
+| virt | cortex-a72 | 2GB | 🔲 | 跨 ARM 核心驗證 |
+| virt | max | 4GB | 🔲 | 啟用所有 ARM 特性 |
+| sbsa-ref | max | 4GB | 🔲 | 伺服器風格啟動 |

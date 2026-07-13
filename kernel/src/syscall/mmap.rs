@@ -24,7 +24,8 @@ pub fn sys_mmap(
 ) -> Result<SyscallReturn> {
     let perms = VmPerms::from_user_bits_truncate(perms as u32);
     let option = MMapOptions::try_from(flags as u32)?;
-    let res = do_sys_mmap(
+    // DIAGNOSTIC: log all mmaps with results to trace the kei_ui Vello crash
+    let result = do_sys_mmap(
         addr as usize,
         len as usize,
         perms,
@@ -32,7 +33,24 @@ pub fn sys_mmap(
         fd as _,
         offset as usize,
         ctx,
-    )?;
+    );
+    match &result {
+        Ok(ret_addr) => {
+            if len > 0x10000 {
+                ostd::early_println!(
+                    "[mmap] OK addr={:#x} len={:#x} ({:.1}KB) -> {:#x} flags={:#x} fd={}",
+                    addr, len, len as f64 / 1024.0, ret_addr, flags, fd
+                );
+            }
+        }
+        Err(e) => {
+            ostd::early_println!(
+                "[mmap] FAIL addr={:#x} len={:#x} ({:.1}KB) flags={:#x} fd={} err={:?}",
+                addr, len, len as f64 / 1024.0, flags, fd, e
+            );
+        }
+    }
+    let res = result?;
     Ok(SyscallReturn::Return(res as _))
 }
 

@@ -36,13 +36,22 @@ pub(super) fn main() {
 
     // Initialize the global states for all CPUs.
     ostd::early_println!("OSTD initialized. Preparing components.");
+
+    // Initialize the leveled logger early so all subsequent log calls
+    // (info!/warn!/error!) get timestamps and levels. On aarch64 the
+    // component system may not register the logger, so we do it manually.
+    #[cfg(target_arch = "aarch64")]
+    {
+        aster_logger::init_manual();
+        ostd::info!("AsterLogger initialized (manual)");
+    }
     // Now that the kernel page table is activated (linear VMA linking),
     // try the full component system on aarch64 too. If it fails, we have
     // manual fallbacks in init_in_first_kthread.
-    ostd::early_println!("[init] calling component::init_all(Bootstrap)...");
+    ostd::info!("calling component::init_all(Bootstrap)...");
     match component::init_all(InitStage::Bootstrap, component::parse_metadata!()) {
-        Ok(()) => ostd::early_println!("[init] component::init_all(Bootstrap) OK"),
-        Err(e) => ostd::early_println!("[WARN] component::init_all(Bootstrap) failed: {:?}", e),
+        Ok(()) => ostd::info!("component::init_all(Bootstrap) OK"),
+        Err(e) => ostd::warn!("component::init_all(Bootstrap) failed: {:?}", e),
     }
     ostd::early_println!("Components Bootstrap done.");
     init();
@@ -83,45 +92,50 @@ pub(super) fn main() {
 }
 
 fn init() {
-    ostd::early_println!("[init] arch::init");
+    ostd::info!("arch::init");
     crate::arch::init();
-    ostd::early_println!("[init] cmdline::init");
+    ostd::info!("cmdline::init");
     #[cfg(target_arch = "aarch64")]
     {
         // cmdline component init may not have run if Bootstrap failed
         aster_cmdline::init_no_component();
     }
-    ostd::early_println!("[init] thread::init");
+    ostd::info!("thread::init");
     crate::thread::init();
-    ostd::early_println!("[init] random::init");
+    ostd::info!("random::init");
     crate::util::random::init();
-    ostd::early_println!("[init] driver::init");
-    #[cfg(not(target_arch = "aarch64"))]
+    ostd::info!("driver::init");
+    // aarch64 and riscv64 defer driver init. On riscv64, aster_input's
+    // all_devices() triggers a div-by-zero panic in core::unicode::conversions
+    // (likely an uninitialized input device constant). Skipping driver init
+    // here lets riscv64 reach userspace; input devices can be initialized
+    // later once the root cause is fixed.
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     crate::driver::init();
     // Register memory character devices (/dev/null, /dev/zero, /dev/urandom)
     // early so they're available before any user-space process starts.
-    #[cfg(target_arch = "aarch64")]
+    #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
     crate::device::mem::init_in_first_kthread();
-    ostd::early_println!("[init] time::init");
+    ostd::info!("time::init");
     crate::time::init();
     // On aarch64, net::init() is deferred to init_in_first_kthread() so that
     // all device components (virtio, network, vsock, softirq) are initialized
     // by the component system's Kthread stage before the network stack probes
     // the virtio-net/vsock devices.
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     {
-        ostd::early_println!("[init] net::init");
+        ostd::info!("net::init");
         crate::net::init();
     }
-    ostd::early_println!("[init] sched::init");
+    ostd::info!("sched::init");
     crate::sched::init();
-    ostd::early_println!("[init] process::init");
+    ostd::info!("process::init");
     crate::process::init();
-    ostd::early_println!("[init] fs::init");
+    ostd::info!("fs::init");
     crate::fs::init();
-    ostd::early_println!("[init] security::init");
+    ostd::info!("security::init");
     crate::security::init();
-    ostd::early_println!("[init] done");
+    ostd::info!("done");
 }
 
 fn init_on_each_cpu() {
@@ -164,7 +178,7 @@ fn bsp_idle_loop() {
     // through the console component (all_devices), which isn't initialized on
     // aarch64, so info!/println! would panic here.
     #[cfg(target_arch = "aarch64")]
-    ostd::early_println!("[bsp_idle] Idle thread for CPU #0 started");
+    ostd::info!("Idle thread for CPU #0 started");
     #[cfg(not(target_arch = "aarch64"))]
     ostd::info!("Idle thread for CPU #0 started");
 
@@ -212,7 +226,7 @@ fn ap_idle_loop() {
 
 // The main function of the first (non-idle) kernel thread
 fn first_kthread() {
-    ostd::early_println!("[first_kthread] Spawn the first kernel thread");
+    ostd::info!("Spawn the first kernel thread");
 
     let init_mnt_ns = MountNamespace::get_init_singleton();
     let fs_resolver = init_mnt_ns.new_path_resolver();
@@ -234,26 +248,26 @@ fn first_kthread() {
 static INIT_PROCESS: Once<Arc<Process>> = Once::new();
 
 fn init_in_first_kthread(path_resolver: &PathResolver) {
-    #[cfg(not(target_arch = "aarch64"))]
+    // riscv64: skip component::init_all(Kthread) — it panics with a div-by-zero
+    // in aster_input (core::unicode::conversions). The Kthread stage initializes
+    // device components (virtio, input, net) which aren't needed for a basic
+    // userspace boot test. Skipping lets us reach spawn_init_process.
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     if let Err(e) = component::init_all(InitStage::Kthread, component::parse_metadata!()) {
-        ostd::early_println!("[WARN] component::init_all(Kthread) failed: {:?}", e);
+        ostd::warn!("component::init_all(Kthread) failed: {:?}", e);
     }
     #[cfg(target_arch = "aarch64")]
     {
         // Component::init_all(Bootstrap) already ran in init() and initialized
         // virtio, framebuffer, console, input, etc. We just need to run the
-        // Kthread stage here (which does the same as component::init_all(Kthread)
+        // Kthread stage (which does the same as component::init_all(Kthread)
         // on other architectures).
-        ostd::early_println!("[kthread] running component::init_all(Kthread)...");
+        ostd::info!("running component::init_all(Kthread)...");
         if let Err(e) = component::init_all(InitStage::Kthread, component::parse_metadata!()) {
-            ostd::early_println!("[WARN] component::init_all(Kthread) failed: {:?}", e);
+            ostd::warn!("component::init_all(Kthread) failed: {:?}", e);
         } else {
-            ostd::early_println!("[kthread] component::init_all(Kthread) OK");
+            ostd::info!("component::init_all(Kthread) OK");
         }
-
-        // fb_console is still our early display (VT FramebufferConsole is set
-        // up later in tty_init_in_first_process).
-        crate::fb_console::init();
     }
     // Work queue should be initialized before interrupt is enabled,
     // in case any irq handler uses work queue as bottom half
@@ -266,7 +280,7 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
     // network, and virtio components that net::init() depends on.
     #[cfg(target_arch = "aarch64")]
     {
-        ostd::early_println!("[kthread] explicit component init for net stack");
+        ostd::info!("explicit component init for net stack");
         let _ = aster_softirq::init_component_fn();
         let _ = aster_console::init_component_fn();
         let _ = aster_framebuffer::init_component_fn();
@@ -275,17 +289,34 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
         // virtio component init probes devices (needs FDT, which is available)
         let _ = aster_virtio::virtio_component_init_pub();
 
-        // Note: fb_console::init() is NOT called again here. The GPU probe
-        // already drew the test pattern + flushed it (2 successful flushes).
-        // Calling fb_console::init() here would trigger a 3rd flush that
-        // timeouts (QEMU TCG virtio-mmio limitation after ~8 commands).
-        // The test pattern remains visible on the SDL window.
+        // Publish the framebuffer. On QEMU TCG aarch64, Arc::new can trigger
+        // a page fault (heap allocator issue). We try it but continue on failure.
+        ostd::info!("publishing framebuffer...");
+        let published = aster_virtio::aarch64_raw_gpu_probe::publish_framebuffer();
+        if published {
+            ostd::info!("framebuffer published OK");
+            crate::device::fb::register_late();
+            ostd::info!("/dev/fb0 registered");
+        } else {
+            ostd::info!("WARNING: framebuffer not published");
+        }
+        // Note: even without publish, the GPU probe has already set up the
+        // scanout with the framebuffer resource. The display shows whatever
+        // is in the DMA buffer.
 
-        ostd::early_println!("[kthread] net::init (deferred)");
+        // NOTE: fb_console::init() is intentionally NOT called. It triggers
+        // flush_framebuffer() which sends TRANSFER_TO_HOST_2D commands that
+        // hang QEMU TCG after the initial GPU setup. The screen stays black
+        // until user-space aris-render writes to /dev/fb0.
+
+        ostd::info!("net::init (deferred)");
         crate::net::init();
     }
+    ostd::early_println!("[kthread] before net::init_in_first_kthread");
     crate::net::init_in_first_kthread();
+    ostd::early_println!("[kthread] after net::init_in_first_kthread, before fs::init_in_first_kthread");
     crate::fs::init_in_first_kthread(path_resolver);
+    ostd::early_println!("[kthread] after fs::init_in_first_kthread (rootfs ready)");
     #[cfg(any(target_arch = "x86_64", target_arch = "riscv64"))]
     crate::vdso::init_in_first_kthread();
 }
@@ -317,14 +348,14 @@ fn print_sixel_test_image() {
     // Each block = select color + 8 data chars of '~' (0x7e = all 6 bits set).
     // Use byte array to avoid Rust line-continuation whitespace issues.
     let sixel_bytes: &[u8] = b"\x1bPq#1;2;100;0;0#1~~~~~~~~#2;2;0;100;0#2~~~~~~~~#3;2;0;0;100#3~~~~~~~~\x1b\\";
-    ostd::early_println!("[sixel test] sending {} bytes to fb_console", sixel_bytes.len());
+    ostd::info!("sending {} bytes to fb_console", sixel_bytes.len());
 
     // Send the Sixel sequence directly through the boot console (fb_console),
     // which has its own DCS parser and renders directly to the framebuffer DMA.
     if let Ok(s) = core::str::from_utf8(sixel_bytes) {
         crate::fb_console::print_str(s);
     }
-    ostd::early_println!("[sixel test] done sending.");
+    ostd::info!("done sending.");
 }
 
 pub(super) fn on_first_process_startup(ctx: &Context) {
@@ -343,7 +374,7 @@ pub(super) fn on_first_process_startup(ctx: &Context) {
         // inventory-based component system doesn't reliably register them on
         // aarch64). These are needed before opening /dev/console and before
         // the VT subsystem connects to the framebuffer.
-        ostd::early_println!("[first_proc] console/framebuffer component init");
+        ostd::info!("console/framebuffer component init");
         let _ = aster_console::init_component_fn();
         let _ = aster_framebuffer::init_component_fn();
         let _ = aster_input::init_component_fn();
@@ -352,11 +383,37 @@ pub(super) fn on_first_process_startup(ctx: &Context) {
         // The VT subsystem will allocate VT1, connect to the framebuffer
         // (already published), and register the keyboard handler (connecting
         // to any virtio-keyboard devices already registered).
-        ostd::early_println!("[first_proc] initializing tty subsystem (aarch64)...");
-        match crate::device::tty_init_in_first_process() {
-            Ok(()) => ostd::early_println!("[first_proc] tty init done"),
-            Err(e) => ostd::early_println!("[first_proc] tty init failed: {:?}", e),
+        //
+        // NOTE: TTY init is skipped on aarch64 for now. It hangs in QEMU TCG
+        // mode due to framebuffer flush operations in the VT console backend.
+        // The aris-render user-space process writes directly to /dev/fb0 via
+        // the published FrameBuffer, which does not go through the TTY layer.
+        ostd::info!("skipping tty subsystem (aarch64, QEMU TCG workaround)");
+
+        // Create /dev/fb0 device node directly in the rootfs.
+        // The full device::init_in_first_process hangs because mounting ramfs
+        // on /dev is unreliable on aarch64 QEMU TCG. Instead, we register
+        // device nodes directly into the existing rootfs /dev directory.
+        ostd::info!("registering device nodes...");
+        {
+            let fs = ctx.thread_local.borrow_fs();
+            let path_resolver = fs.resolver().read();
+            // Register just char device nodes (fb0, null, zero, etc.) directly.
+            for device in crate::device::registry::char::collect_all() {
+                if let Some(meta) = device.devtmpfs_meta() {
+                    let dev_id = device.id().as_encoded_u64();
+                    let _ = crate::device::add_node(
+                        crate::device::DeviceType::Char,
+                        dev_id,
+                        &meta,
+                        &path_resolver,
+                    );
+                }
+            }
+            ostd::info!("device nodes registered");
         }
+        // The framebuffer flush happens during GPU probe. Background fill
+        // thread removed for build compatibility.
 
         // (Sixel test moved to init_in_first_kthread where framebuffer_info()
         // is still valid.)
@@ -398,7 +455,7 @@ fn open_initial_console(ctx: &Context) {
         let _ = ft.insert(console.clone(), FdFlags::empty()); // fd 0 = stdin
         let _ = ft.insert(console.clone(), FdFlags::empty()); // fd 1 = stdout
         let _ = ft.insert(console.clone(), FdFlags::empty()); // fd 2 = stderr
-        ostd::early_println!("[init] serial console bound to fd 0/1/2");
+        ostd::info!("serial console bound to fd 0/1/2");
         return;
     }
 
@@ -422,11 +479,11 @@ fn open_initial_console(ctx: &Context) {
     let file: Arc<dyn FileLike> = if let Some((found, path)) = path {
         match InodeHandle::new(path, AccessMode::O_RDWR, StatusFlags::empty()) {
             Ok(f) => {
-                ostd::early_println!("[init] console opened: {}", found);
+                ostd::info!("console opened: {}", found);
                 Arc::new(f)
             }
             Err(e) => {
-                ostd::early_println!("[init] console open failed: {:?}, falling back", e);
+                ostd::info!("console open failed: {:?}, falling back", e);
                 return;
             }
         }

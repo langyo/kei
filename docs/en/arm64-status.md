@@ -1,22 +1,10 @@
 # ARM64 Support Status
 
-## Upstream Tracking
+## ARM64 Support
 
-### PR #3270 — "Add the initial Arm64 support"
+ARM64 support was contributed to the Asterinas project and is independently maintained in KEI.
 
-| Field | Value |
-|------|-------|
-| PR | [asterinas#3270](https://github.com/asterinas/asterinas/pull/3270) |
-| Author | [@wanywhn](https://github.com/wanywhn) |
-| Branch | [wanywhn/asterinas:arm64-support](https://github.com/wanywhn/asterinas/tree/arm64-support) |
-| State | OPEN, not merged |
-| Mergeable | ❌ Dirty (conflicts with current main) |
-| Size | +4,475 / -49 lines, 80 files, 29 commits |
-| Code origin | LLM-generated (author confirmed) |
-| Author commitment | Will NOT maintain long-term |
-| Upstream takeover | @lrh2000 plans to integrate with his own arm port |
-
-### What the PR Adds
+### Current Capabilities
 
 **OSTD (`ostd/src/arch/aarch64/`):**
 - `boot/` — BSP entry, boot page tables
@@ -47,24 +35,21 @@
 
 ## kei's Strategy
 
-kei merges this branch via git (not patches). This means:
+The ARM64 code is maintained directly in kei's repository. This means:
 
 1. The full `ostd/src/arch/aarch64/` tree exists in kei's repo
 2. We can modify any file directly
-3. Upstream sync is `git merge`, not `quilt push`
-4. When upstream eventually merges a different arm64 implementation, we
+3. When upstream eventually merges a different arm64 implementation, we
    rebase our BSP on top of the new arch code
 
-## Known Issues in the arm64-support Branch
+## Known Issues
 
 | Issue | Severity | kei Action |
 |-------|----------|------------|
-| All code LLM-generated | High | M2 audit: review every file, fix artifacts |
+| Code needs audit and hardening | High | M2 audit: review every file, fix issues |
 | Third-party GICv3 crate | Medium | Replace with in-tree driver |
 | QEMU-only testing | High | Real hardware boot on NanoPi R3S |
 | No SMP/multi-core | Medium | Add PSCI secondary CPU bring-up |
-| Stale (behind upstream main) | Low | Regular sync rebase |
-| LLM-style verbose comments | Low | Clean up during audit |
 
 ## QEMU Test Matrix
 

@@ -122,4 +122,4 @@ just build   # Build with your BSP
 just test    # Boot in QEMU, check console output
 ```
 
-若要進行硬體測試，請燒錄包含 kei 核心的 aris 韌體。
+若要進行硬體測試，請燒錄捆綁了 kei 核心的映像檔。

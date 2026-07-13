@@ -10,14 +10,38 @@
 #   just run x86_64
 #   just run riscv64
 
-set unstable
 set shell := ["bash", "-c"]
-# On Windows, use Git Bash (not WSL) for simple recipes. Recipes that need
-# WSL (like _build-aarch64) call `wsl` explicitly.
 set windows-shell := ["bash.exe", "-c"]
+set unstable
 set lists
 
-import "./celestia-devtools.just"
+# Shared celestia-devtools recipes — NOT in git. This justfile references shared
+# variables, so the import is REQUIRED. Bootstrap once: celestia-devtools init
+# (or `just fetch` if already staged). Refresh after upgrades.
+import? "./.just/git-bash-interop.just"
+import "./.just/celestia-devtools.just"
+
+# Stage shared celestia-devtools recipes into .just/ (gitignored).
+# Source order: explicit URL arg → local pip bundle (offline) → GitHub raw.
+# curl honors HTTP_PROXY/HTTPS_PROXY/ALL_PROXY env vars automatically.
+[script('bash')]
+fetch URL='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out=.just/celestia-devtools.just
+    mkdir -p .just
+    if [ -n "{{URL}}" ]; then
+      echo "[fetch] {{URL}} -> $out"
+      curl -fsSL "{{URL}}" -o "$out"
+    elif command -v celestia-devtools >/dev/null 2>&1; then
+      src=$(celestia-devtools include-path)
+      echo "[fetch] local bundle ($src) -> $out"
+      cp "$src" "$out"
+    else
+      echo "[fetch] github raw -> $out"
+      curl -fsSL "https://raw.githubusercontent.com/celestia-island/celestia-devtools/dev/src/celestia_devtools/common.just" -o "$out"
+    fi
+    echo "[fetch] wrote $out"
 
 default: list-arch
 
@@ -58,11 +82,11 @@ versions:
 # client keypair and embed the public key into the initramfs.
 
 # Generate an ed25519 SSH keypair for VM access (one-time setup).
-# The private key is saved to test/initramfs/build/client_ssh_key.
+# The private key is saved to tests/initramfs/build/client_ssh_key.
+[script('bash')]
 setup-keys:
-    #!/usr/bin/env bash
     set -e
-    KEYDIR="test/initramfs/build"
+    KEYDIR="tests/initramfs/build"
     mkdir -p "$KEYDIR"
     if [ -f "$KEYDIR/client_ssh_key" ]; then
         echo "SSH key already exists at $KEYDIR/client_ssh_key"
@@ -86,10 +110,10 @@ ssh-info:
     @echo "║  Port:     2222                                              ║"
     @echo "║  User:     root                                              ║"
     @echo "║  Auth:     public-key (ed25519)                              ║"
-    @echo "║  Key:      test/initramfs/build/client_ssh_key               ║"
+    @echo "║  Key:      tests/initramfs/build/client_ssh_key               ║"
     @echo "╠══════════════════════════════════════════════════════════════╣"
     @echo "║  Connect:                                                    ║"
-    @echo "║    ssh -i test/initramfs/build/client_ssh_key \\             ║"
+    @echo "║    ssh -i tests/initramfs/build/client_ssh_key \\             ║"
     @echo "║        -o StrictHostKeyChecking=no -p 2222 root@127.0.0.1    ║"
     @echo "╚══════════════════════════════════════════════════════════════╝"
     @echo ""
@@ -104,10 +128,30 @@ build-board BOARD:
     just cache-guard
     {{python_cmd}} scripts/build.py {{BOARD}}
 
+# ── Dev ─────────────────────────────────────────────────────
+
+# Quick dev launch: build + run QEMU for the host architecture.
+# On Windows defaults to aarch64 (SDL window + virtio-gpu display).
+# Usage: just dev              # auto-detect (aarch64 on Windows)
+#        just dev aarch64      # ARM64 with SDL window
+#        just dev x86_64       # x86_64 serial console
+dev ARCH="":
+    just run {{ARCH}}
+
+# Run kei with aris-rendered UI filling the entire screen.
+# Usage: just render             # aarch64 QEMU + aris-rendered desktop
+[script('bash')]
+render ARCH="aarch64":
+    RENDER_UI=1 just _run-aarch64 0
+
+# Build only (no QEMU launch).
+dev-build ARCH="":
+    just build-arch {{ARCH}}
+
 # Build the kernel for a specific architecture.
 # Usage: just build-arch aarch64  (or x86_64, riscv64, loongarch64)
+[script('bash')]
 build-arch ARCH:
-    #!/usr/bin/env bash
     set -e
     ARCH="{{ARCH}}"
     case "$ARCH" in
@@ -131,8 +175,8 @@ build-arch ARCH:
     esac
 
 # Build aarch64 kernel + ARM64 Image + initramfs (internal).
+[script('bash')]
 _build-aarch64:
-    #!/usr/bin/env bash
     set -e
     echo "[build] Building aarch64 kernel..."
     wsl -d Ubuntu-24.04 -- bash -lc 'source ~/.cargo/env 2>/dev/null; cd "/mnt/d/源代码/工程项目/celestia/kei" && cargo osdk build --scheme aarch64 --target-arch aarch64' 2>&1 | tail -5
@@ -142,7 +186,7 @@ _build-aarch64:
     fi
     # Build ARM64 Image from ELF
     echo "[build] Creating ARM64 Image..."
-    wsl -d Ubuntu-24.04 -- bash -c 'python3 "/mnt/d/源代码/工程项目/celestia/kei/tools/make_arm64_image.py" "/mnt/d/源代码/工程项目/celestia/kei/target/osdk/aster-kernel/aster-kernel-osdk-bin.qemu_elf" "/mnt/d/源代码/工程项目/celestia/kei/target/osdk/aster-kernel/aster-kernel-osdk-bin.image" 2>&1 | tail -1'
+    wsl -d Ubuntu-24.04 -- bash -c 'python3 "/mnt/d/源代码/工程项目/celestia/kei/scripts/tools/make_arm64_image.py" "/mnt/d/源代码/工程项目/celestia/kei/target/osdk/aster-kernel/aster-kernel-osdk-bin.qemu_elf" "/mnt/d/源代码/工程项目/celestia/kei/target/osdk/aster-kernel/aster-kernel-osdk-bin.image" 2>&1 | tail -1'
     echo "[build] Done. Kernel image: target/osdk/aster-kernel/aster-kernel-osdk-bin.image"
 
 # Format Rust + Markdown docs
@@ -180,8 +224,8 @@ initramfs-force:
 #   just run headless     # aarch64 without GUI (SSH only)
 
 # Launch QEMU. Defaults to host architecture; pass ARCH to override.
+[script('bash')]
 run ARCH="":
-    #!/usr/bin/env bash
     set -e
     ARG="{{ARCH}}"
     if [ -z "$ARG" ]; then
@@ -235,8 +279,8 @@ run ARCH="":
     esac
 
 # Internal: launch aarch64 QEMU.
+[script('bash')]
 _run-aarch64 HEADLESS:
-    #!/usr/bin/env bash
     set -e
     HEADLESS="{{HEADLESS}}"
 
@@ -274,7 +318,14 @@ _run-aarch64 HEADLESS:
 
     # Convert paths for Windows QEMU
     WINIMAGE=$(cygpath -w "target/osdk/aster-kernel/aster-kernel-osdk-bin.image" 2>/dev/null || echo "target/osdk/aster-kernel/aster-kernel-osdk-bin.image")
-    WININITRD=$(cygpath -w "test/initramfs/build/initramfs_aarch64.cpio.gz" 2>/dev/null || echo "test/initramfs/build/initramfs_aarch64.cpio.gz")
+    # Use the aris-rendered UI initramfs if RENDER_UI=1, else the SSH/shell initramfs.
+    if [ "$RENDER_UI" = "1" ]; then
+        INITRAMFS_PATH="tests/initramfs/build/initramfs_render_new.cpio.gz"
+        echo "[run] Using aris-rendered UI initramfs"
+    else
+        INITRAMFS_PATH="tests/initramfs/build/initramfs_aarch64.cpio.gz"
+    fi
+    WININITRD=$(cygpath -w "$INITRAMFS_PATH" 2>/dev/null || echo "$INITRAMFS_PATH")
     WINLOG=$(cygpath -w "target/qemu_serial.log" 2>/dev/null || echo "target/qemu_serial.log")
 
     # Launch QEMU in the foreground. The SDL window appears, and the terminal
@@ -284,7 +335,7 @@ _run-aarch64 HEADLESS:
     echo "[run] Launching QEMU (Ctrl+C or close window to stop)..."
     echo "[run] Monitor: tcp://127.0.0.1:55555 (use 'just screenshot' to capture)"
     echo ""
-    exec MSYS_NO_PATHCONV=1 "/c/Program Files/qemu/qemu-system-aarch64.exe" \
+    export MSYS_NO_PATHCONV=1; exec "/c/Program Files/qemu/qemu-system-aarch64.exe" \
         -cpu cortex-a72 -machine virt,gic-version=3,virtualization=on \
         -m 2G -smp 1 --no-reboot \
         $DISPLAY_OPT \
@@ -299,8 +350,8 @@ _run-aarch64 HEADLESS:
         -append "init=/init SHELL=/bin/sh LOGNAME=root HOME=/ USER=root PATH=/bin:/sbin"
 
 # Internal: launch x86_64 QEMU via cargo osdk run.
+[script('bash')]
 _run-x86_64:
-    #!/usr/bin/env bash
     set -e
     echo "[run] x86_64 uses 'cargo osdk run' with serial console"
     echo "[run] No SSH server on x86_64 (uses serial shell)"
@@ -308,8 +359,8 @@ _run-x86_64:
     cargo osdk run --target x86_64-unknown-none
 
 # Internal: launch RISC-V QEMU via cargo osdk run.
+[script('bash')]
 _run-riscv64:
-    #!/usr/bin/env bash
     set -e
     echo "[run] RISC-V uses 'cargo osdk run' with serial console"
     echo "[run] No SSH server on RISC-V (uses serial shell)"
@@ -317,13 +368,62 @@ _run-riscv64:
     cargo osdk run --scheme riscv --target-arch riscv64
 
 # Internal: launch LoongArch QEMU via cargo osdk run.
+[script('bash')]
 _run-loongarch64:
-    #!/usr/bin/env bash
     set -e
     echo "[run] LoongArch uses 'cargo osdk run' with serial console"
     echo "[run] No SSH server on LoongArch (uses serial shell)"
     echo ""
     cargo osdk run --scheme loongarch --target-arch loongarch64
+
+# ── WSL2 QEMU (headless, screenshot-driven) ────────────────
+#
+# Run kei in WSL2's qemu-system-aarch64 in headless mode and capture
+# the display via QEMU monitor screendump. This is the primary path
+# for automated CI and screenshot analysis on Windows hosts, since
+# WSL2 QEMU avoids the SDL/GUI overhead and the CJK-path-in-WSL blocker
+# is sidestepped via the ~/celestia/kei ASCII symlink.
+#
+# Recipes use the `wslq-` prefix to avoid colliding with the shared
+# `wsl-run` recipe in celestia-devtools.just.
+#
+# Usage:
+#   just wslq-run               # run aarch64 headless (100s)
+#   just wslq-run 60            # run for 60 seconds
+#   just wslq-ui                # run with aris-render kei_ui initramfs
+#   just wslq-screenshot        # convert last screendump to PNG
+
+# Run kei aarch64 in WSL2 QEMU headless. Optional SECS (default 100).
+# Uses INITRAMFS env var to select the initramfs (default: render_new).
+[script('bash')]
+wslq-run SECS="100":
+    set -e
+    export INITRAMFS="${INITRAMFS:-tests/initramfs/build/initramfs_render_new.cpio.gz}"
+    wsl -d Ubuntu-24.04 -e bash -lc 'bash ~/celestia/kei/scripts/wsl_qemu_aarch64.sh {{SECS}}'
+
+# Run kei with the kei_ui (aris-render browser UI) initramfs.
+[script('bash')]
+wslq-ui SECS="110":
+    set -e
+    export INITRAMFS="tests/initramfs/build/initramfs_kei_ui.cpio.gz"
+    wsl -d Ubuntu-24.04 -e bash -lc 'bash ~/celestia/kei/scripts/wsl_qemu_aarch64.sh {{SECS}}'
+
+# Build a render initramfs (kei_ui or kei_fbtest).
+[script('bash')]
+wslq-initramfs BIN="kei_ui":
+    {{python_cmd}} scripts/build_render_initramfs.py {{BIN}}
+
+# Convert the last WSL2 screendump to PNG and show pixel stats.
+[script('bash')]
+wslq-screenshot:
+    set -e
+    wsl -d Ubuntu-24.04 -e bash -lc 'cd ~/celestia/kei && python3 scripts/ppm_to_png.py target/wsl_screendump.ppm target/wsl_screendump.png'
+    @ls -la target/wsl_screendump.png 2>/dev/null || echo "[wslq-screenshot] no screendump yet"
+
+# Ensure the ~/celestia/kei ASCII symlink exists (bypasses CJK-path blocker).
+[script('bash')]
+wslq-setup:
+    wsl -d Ubuntu-24.04 -e bash -lc 'mkdir -p ~/celestia && ln -sfn "/mnt/d/源代码/工程项目/celestia/kei" ~/celestia/kei && echo "symlink OK: ~/celestia/kei"'
 
 # ── Screenshot ──────────────────────────────────────────────
 #
@@ -333,8 +433,8 @@ _run-loongarch64:
 
 # Capture a screenshot of the running QEMU display.
 # Usage: just screenshot [filename]
+[script('bash')]
 screenshot FILE="target/screenshot.ppm":
-    #!/usr/bin/env bash
     set -e
     OUT="{{FILE}}"
     # Ensure .ppm extension for QEMU compatibility
@@ -383,20 +483,7 @@ screenshot FILE="target/screenshot.ppm":
         elif command -v python3 &>/dev/null || command -v python &>/dev/null; then
             PNG="${OUT%.ppm}.png"
             PYTHON=$(command -v python3 || command -v python)
-            "$PYTHON" -c "
-import sys
-with open(sys.argv[1], 'rb') as f:
-    # PPM P6 header: P6\n<width> <height>\n255\n
-    magic = f.readline()
-    if magic.strip() != b'P6':
-        sys.exit(1)
-    dims = f.readline().split()
-    w, h = int(dims[0]), int(dims[1])
-    f.readline()  # maxval
-    data = f.read()
-    # Write as simple binary (caller can analyze raw)
-    print(f'{w}x{h}, {len(data)} bytes pixel data')
-" "$OUT" 2>/dev/null && echo "[screenshot] PPM validated"
+            "$PYTHON" scripts/ppm_info.py "$OUT" 2>/dev/null && echo "[screenshot] PPM validated"
         fi
     else
         echo "[screenshot] ERROR: Screenshot file not created."
@@ -407,13 +494,13 @@ with open(sys.argv[1], 'rb') as f:
 # Connect to the running aarch64 VM via SSH.
 ssh:
     @echo "Connecting to kei VM via SSH..."
-    ssh -i test/initramfs/build/client_ssh_key \
+    ssh -i tests/initramfs/build/client_ssh_key \
         -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -p 2222 root@127.0.0.1
 
 # Stop the running QEMU instance.
+[script('bash')]
 kill:
-    #!/usr/bin/env bash
     taskkill //F //IM qemu-system-aarch64.exe 2>/dev/null || true
     taskkill //F //IM qemu-system-x86_64.exe 2>/dev/null || true
     taskkill //F //IM qemu-system-riscv64.exe 2>/dev/null || true

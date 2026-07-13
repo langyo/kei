@@ -84,10 +84,19 @@ unsafe extern "C" fn trap_handler_el1(f: &mut TrapFrame) {
                 return;
             }
 
+            // Read current SP for diagnosis (kernel faults use the same SP).
+            let sp: usize;
+            unsafe { core::arch::asm!("mov {}, sp", out(reg) sp); }
+            // Dump x0-x9 from the trap frame for diagnosis.
+            let g = &f.general;
             panic!(
                 "Unhandled kernel page fault: \
-                 ESR_EL1={:#018x}, FAR_EL1={:#018x}, ELR_EL1={:#018x}",
-                esr, far, f.elr_el1,
+                 ESR_EL1={:#018x}, FAR_EL1={:#018x}, ELR_EL1={:#018x}, SP={:#018x}\n\
+                 x0={:#018x} x1={:#018x} x2={:#018x} x3={:#018x}\n\
+                 x4={:#018x} x5={:#018x} x6={:#018x} x7={:#018x}",
+                esr, far, f.elr_el1, sp,
+                g.x0, g.x1, g.x2, g.x3,
+                g.x4, g.x5, g.x6, g.x7,
             );
         }
         // EC = 0x07: Trapped SIMD/FP access (FPU not enabled)
@@ -303,6 +312,28 @@ fn handle_user_page_fault(f: &mut TrapFrame, exception: &CpuException) {
         tpidr,
         sp_el0,
     );
+
+    // Walk the user stack frames (x29 = frame pointer chain) to get a backtrace.
+    let mut fp = f.general.x29;
+    crate::early_println!("[trap] user backtrace:");
+    crate::early_println!("[trap]   #0 {:#x} (faulting PC)", f.elr_el1);
+    crate::early_println!("[trap]   #1 {:#x} (return addr)", f.general.x30);
+    for i in 2..15 {
+        if fp == 0 || fp > 0x800000000000 {
+            break;
+        }
+        // aarch64 frame: [saved_fp, saved_lr]
+        let saved_fp = unsafe { core::ptr::read_volatile(fp as *const usize) };
+        let saved_lr = unsafe { core::ptr::read_volatile((fp + 8) as *const usize) };
+        if saved_lr == 0 || saved_lr > 0x800000000000 {
+            break;
+        }
+        crate::early_println!("[trap]   #{} {:#x}", i, saved_lr);
+        if saved_fp <= fp {
+            break; // prevent infinite loop
+        }
+        fp = saved_fp;
+    }
 
     // For user-mode faults that can't be handled inline: return from run_user
     // so UserContext::execute can deliver a signal.

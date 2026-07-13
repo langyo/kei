@@ -9,7 +9,7 @@ method = "grub-rescue-iso"
 boot_protocol = "multiboot2"
 
 [qemu]
-args = "$(./tools/qemu_args.sh normal)"
+args = "$(./scripts/tools/qemu_args.sh normal)"
 
 # Special options for running
 [run.boot]
@@ -22,35 +22,35 @@ kcmd_args = [
     "init=/init",
 ]
 init_args = ["sh", "-l"]
-initramfs = "test/initramfs/build/initramfs.cpio.gz"
+initramfs = "tests/initramfs/build/initramfs.cpio.gz"
 
 # Special options for testing
 [test.qemu]
-args = "$(./tools/qemu_args.sh test)"
+args = "$(./scripts/tools/qemu_args.sh test)"
 
 # Other Schemes
 
 [scheme."microvm"]
 boot.method = "qemu-direct"
 build.strip_elf = true
-qemu.args = "$(./tools/qemu_args.sh microvm)"
+qemu.args = "$(./scripts/tools/qemu_args.sh microvm)"
 
 [scheme."iommu"]
 supported_archs = ["x86_64"]
-qemu.args = "$(./tools/qemu_args.sh iommu)"
+qemu.args = "$(./scripts/tools/qemu_args.sh iommu)"
 
 [scheme."tdx"]
 supported_archs = ["x86_64"]
 build.features = ["cvm_guest"]
 boot.method = "grub-qcow2"
 grub.boot_protocol = "linux"
-qemu.args = "$(./tools/qemu_args.sh tdx)"
+qemu.args = "$(./scripts/tools/qemu_args.sh tdx)"
 
 [scheme."riscv"]
 supported_archs = ["riscv64"]
 boot.method = "qemu-direct"
 build.strip_elf = false
-qemu.args = "$(./tools/qemu_args.sh riscv)"
+qemu.args = "$(./scripts/tools/qemu_args.sh riscv)"
 
 [scheme."sifive_u"]
 supported_archs = ["riscv64"]
@@ -122,7 +122,7 @@ qemu.args = """\
 
 # aarch64 uses its own initramfs (with dropbear SSH server) and init args.
 [scheme."aarch64".run.boot]
-initramfs = "test/initramfs/build/initramfs_aarch64.cpio.gz"
+initramfs = "tests/initramfs/build/initramfs_aarch64.cpio.gz"
 kcmd_args = [
     "SHELL=/bin/sh",
     "LOGNAME=root",

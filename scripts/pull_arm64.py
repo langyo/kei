@@ -79,7 +79,7 @@ def main() -> int:
     cf.blank()
     cf.step("[2/3] Extracting ARM64 architecture code")
     targets = [
-        "ostd/src/arch/aarch64",
+        "packages/ostd/src/arch/aarch64",
         "kernel/src/arch/aarch64",
     ]
     for path in targets:

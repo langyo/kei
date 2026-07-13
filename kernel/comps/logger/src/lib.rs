@@ -35,3 +35,12 @@ fn init() -> Result<(), ComponentInitError> {
     aster_logger::init();
     Ok(())
 }
+
+/// Manual initialization for aarch64 where the component system is bypassed.
+/// Call this early in the boot path to enable leveled logging with timestamps.
+pub fn init_manual() {
+    aster_logger::init();
+    // Set the default log level to Info so boot messages are visible
+    // without needing the ostd.log_level= kernel cmdline parameter.
+    ostd::log::set_max_level(ostd::log::LevelFilter::Info);
+}
