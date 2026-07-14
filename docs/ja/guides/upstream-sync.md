@@ -14,4 +14,4 @@ just versions     # 現在の上流ベースラインを表示
 ## 同期頻度
 
 - 定期: 3–6ヶ月ごと
-- 緊急修正: `just vendor-ref <sha>`
+- 緊急修正: `just vendor <sha>`

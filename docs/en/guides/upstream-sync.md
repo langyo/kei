@@ -35,7 +35,7 @@ git commit -m "vendor: absorb asterinas <sha>"
 ## When to Vendor
 
 - Routine: every 3–6 months
-- Critical fix: vendor a pinned ref (`just vendor-ref <sha>`)
+- Critical fix: vendor a pinned ref (`just vendor <sha>`)
 
 ## See Also
 

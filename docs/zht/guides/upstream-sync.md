@@ -14,4 +14,4 @@ just versions     # 查看目前上游基線
 ## 同步頻率
 
 - 常規：每 3–6 個月
-- 緊急修復：`just vendor-ref <sha>`
+- 緊急修復：`just vendor <sha>`

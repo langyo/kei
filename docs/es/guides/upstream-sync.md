@@ -14,4 +14,4 @@ just versions     # Mostrar base upstream actual
 ## Frecuencia
 
 - Rutina: cada 3–6 meses
-- Corrección urgente: `just vendor-ref <sha>`
+- Corrección urgente: `just vendor <sha>`

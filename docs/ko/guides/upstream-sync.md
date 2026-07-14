@@ -14,4 +14,4 @@ just versions     # 현재 상류 기준 표시
 ## 동기화 빈도
 
 - 정기: 3~6개월마다
-- 긴급 수정: `just vendor-ref <sha>`
+- 긴급 수정: `just vendor <sha>`

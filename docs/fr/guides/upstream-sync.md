@@ -14,4 +14,4 @@ just versions     # Afficher la base amont actuelle
 ## Fréquence
 
 - Routine : tous les 3–6 mois
-- Correctif urgent : `just vendor-ref <sha>`
+- Correctif urgent : `just vendor <sha>`

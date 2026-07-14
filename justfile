@@ -65,24 +65,35 @@ env-check:
 setup:
     {{python_cmd}} scripts/setup.py
 
-vendor:
-    {{python_cmd}} scripts/vendor_upstream.py
+# Vendor upstream asterinas into the tree.
+#   just vendor          # latest
+#   just vendor <ref>    # specific git ref
+vendor *ARGS='':
+    {{python_cmd}} scripts/vendor_upstream.py {{ARGS}}
 
-vendor-ref REF:
-    {{python_cmd}} scripts/vendor_upstream.py {{REF}}
-
-pull-arm64:
-    {{python_cmd}} scripts/pull_arm64.py
-
-pull-arm64-ref REF:
-    {{python_cmd}} scripts/pull_arm64.py {{REF}}
+# Pull (vendor) upstream code.
+#   just pull arm64          # latest arm64 code
+#   just pull arm64 <ref>    # specific git ref
+[script('sh')]
+pull target='arm64' *ARGS='':
+    set -euo pipefail
+    case "{{target}}" in
+      arm64)
+        {{python_cmd}} scripts/pull_arm64.py {{ARGS}}
+        ;;
+      *)
+        echo "unknown pull target: {{target}}" >&2
+        echo "usage: just pull [arm64]" >&2
+        exit 1
+        ;;
+    esac
 
 versions:
     @echo "=== Upstream asterinas ==="
     @cat .vendored-upstream 2>/dev/null || echo "  (not vendored yet — run 'just vendor')"
     @echo ""
     @echo "=== ARM64 source ==="
-    @cat .vendored-arm64 2>/dev/null || echo "  (not pulled yet — run 'just pull-arm64')"
+    @cat .vendored-arm64 2>/dev/null || echo "  (not pulled yet — run 'just pull arm64')"
 
 # ── SSH Keys (aarch64) ──────────────────────────────────────
 #
