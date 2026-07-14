@@ -3,10 +3,22 @@ edition = "2021"
 name = "kei-qemu-mps2"
 version = "0.1.0"
 publish = false
+# Explicitly bind to the kei-wire sub-workspace rooted at `packages/kei`.
+# Without this, cargo's workspace discovery walks up from this crate to
+# `kei/Cargo.toml` and tries to claim qemu-mps2 as a member of the in-kernel
+# workspace (which is wrong — the in-kernel workspace excludes packages/kei).
+workspace = "../kei"
 
 [dependencies]
-# kei wire protocol library (workspace root, two levels up)
-kei = { path = "../..", default-features = false, features = ["wire", "manifest", "hal"] }
+# kei wire protocol library (sibling package in the kei sub-workspace).
+# qemu-mps2 and the kei wire library are co-located in a [workspace] rooted at
+# `packages/kei/Cargo.toml`. Earlier this dep read `path = "../.."` which
+# incorrectly resolved to the kei root workspace (which excludes `packages/kei`).
+kei = { path = "../kei", default-features = false, features = [
+    "wire",
+    "manifest",
+    "hal",
+] }
 
 # Heap allocator for `alloc` (kei's wire protocol uses Vec<u8> for frames).
 linked_list_allocator = "0.10"
