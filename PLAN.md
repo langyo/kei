@@ -1,29 +1,124 @@
 # kei — 项目状态与计划 (PLAN)
 
-> 本文件于 **2026-07-04** 更新，记录项目当前状态、近期进展与后续计划。
-> 原有详细计划已保留于文末「既有详细计划（存档）」。
+> 本文件于 **2026-07-15** 更新，记录项目当前状态、近期进展与后续计划。
 
-## 1. 项目概述
+## Refresh log 2026-07-15 #6 (aarch64 SMP/PSCI 多核启动)
 
-- **名称**：`kei`
-- **简介**：面向工业物联网的 Rust OS 内核 —— 源自 Asterinas（星绽）。ARM64/RISC-V，RTOS 级实时性，完整 Linux syscall ABI 兼容。
-- **远程仓库**：本地仓库（无 origin）
-- **技术栈**：Rust / just / OSDK
-- **类别**：os-kernel
+- **aarch64 SMP 支持实现**：从 stub 到完整的多核启动：
+  - **`packages/ostd/src/arch/aarch64/boot/smp.rs`**：`count_processors()` 从 FDT `/cpus` 节点统计 CPU 数量；`bringup_all_aps()` 通过 PSCI `CPU_ON`（0xC4000003）唤醒每个 AP，收集非 BSP 的 MPIDR。新增 `psci_cpu_on()` / `read_mpidr_el1()` / `collect_ap_mpidrs()` / `aarch64_ap_early_entry()` 等辅助函数。
+  - **`packages/ostd/src/arch/aarch64/boot/ap_boot.S`**（新文件）：AP 启动汇编 — 设置 MAIR_EL1/TCR_EL1/TTBR1_EL1，启用 MMU，加载 `PerApRawInfo` 中的栈和 CPU-local 指针，设置 TPIDR_EL1 和 VBAR_EL1，原子递增 CPU ID 计数器，跳转到 Rust `aarch64_ap_early_entry`。
+  - **`packages/ostd/src/arch/aarch64/irq/chip/mod.rs`**：`init_on_ap()` 实现完整的 GIC redistributor 唤醒（读取 MPIDR_EL1 计算 GICR 偏移，清除 ProcessorSleep，配置 GICR_SGI 寄存器，启用 timer PPI INTID 30）。
+  - 通用框架 `packages/ostd/src/boot/smp.rs` 已完备（栈分配、`ap_early_entry`、等待 AP 就绪），本 commit 补全 aarch64 粘合层。
+- **启用方式**：`OSDK.toml` 中 `-smp ${SMP:-1}` → 改为 `${SMP:-4}` 即可测试。
 
-## 2. 当前状态
+## Refresh log 2026-07-15 #5 (TLS trait 抽象 + busybox TLS 修复)
 
-- **当前分支**：`dev`
-- **工作区**：干净
-- **最近提交时间**：2026-07-04
-- **最近提交**：test: add kei+evernight E2E QEMU ignition test script
-- **initramfs**：已构建（`test/initramfs/build/initramfs.cpio.gz`，aarch64 busybox + init）
+- **TLS 初始化重构**：将 `kernel/src/process/program_loader/elf/load_elf.rs` 中 145 行 `#[cfg(target_arch = "aarch64")]` 的单体 `setup_tls()` 提取为架构无关的 trait 抽象：
+  - **新增** `kernel/src/process/program_loader/elf/tls.rs`：定义 `TlsLayout` trait（`pthread_size()` / `gap_above_tp()` / `init_tcb()` / `total_alloc()` / `compute_tp()`），封装 musl TLS_ABOVE_TP 布局的架构差异。
+  - **实现**：`TlsLayoutAarch64`（pthread=0xc8） / `TlsLayoutRiscv64`（pthread=0xc0） / `TlsLayoutX8664`（pthread=0xc8），均含完整 TCB 初始化（self/dtvc/locale）。
+  - **泛型 `setup_tls::<L: TlsLayout>()`**：接受 `load_bias` 参数，正确计算 PIE 二进制的 TLS 模板重定位地址（修复 `tls_phdr_vaddr` 无 load bias 的 bug）。
+  - `load_elf.rs` 调用处按 `#[cfg(target_arch)]` 选择对应 layout，非三大架构返回 `None`。
+  - 旧 non-aarch64 分支（仅分配 2 页、无 TCB 初始化）已移除 — riscv64/x86_64 现在与 aarch64 共享相同的 musl TCB 初始化逻辑。
 
-## 3. 未提交改动
+## Refresh log 2026-07-15 #4 (riscv64 + x86_64 修复)
 
-无。
+- **riscv64 内核启动修复**：
+  - `kernel/src/init.rs`：添加 `ostd::early_println!()` 诊断标记（`ostd::info!()` 因 `core::unicode::conversions` div-by-zero bug 在 riscv64 上完全抑制）；`cmdline::init_no_component()` 覆盖 riscv64（与 aarch64 相同的 component system 绕过）；`bsp_idle_loop` / `first_kthread` 加 riscv64 early_println。
+  - `kernel/src/time/mod.rs`：riscv64 使用 `init_no_rtc()` 绕过（与 aarch64 相同），跳过 `system_time::init()` / `clocks::init()` / `softirq::init()` 全路径。根因：全路径启用 timer 中断回调，回调可能触发 `core::unicode::conversions` div-by-zero panic → kernel trap。
+- **x86_64 启动修复**：
+  - `OSDK.toml` microvm scheme 新增 `grub.boot_protocol = "linux"`，切换为 Linux bzImage 启动协议。`packages/ostd/libs/linux-bzimage/` 基础设施已完备（setup header + bzImage builder），QEMU `-kernel` 原生支持 bzImage 格式。
+  - 根因：原 multiboot2 ELF 为 64-bit，QEMU x86_64 `-kernel` 的 multiboot loader 仅接受 32-bit ELF（即使 `make_elf_for_qemu()` patch `e_machine` 也无效）。
 
-## 4. 近期进展
+## Refresh log 2026-07-15 #3 (webui 骨架 + QEMU 网络 + 三平台验证)
+
+- **新增 `packages/webui/`**：kei 浏览器端仪表盘，tairitsu + hikari 技术栈。
+  - `Cargo.toml`：独立 crate（非 kei workspace 成员），依赖 tairitsu-vdom/hooks/macros/web + hikari-palette/components/icons，target `wasm32-wasip2`。
+  - `src/lib.rs`：kei 状态仪表盘 — 系统信息卡片（kernel/arch/uptime/memory）、网络状态卡片（host/port/ws status）、终端日志查看器、页脚状态栏。
+  - 构建：需 `tairitsu-packager dev` 启动 dev server（port 3000），浏览器通过 `ws://localhost:8423/ws` 连接 kei WS JSON-RPC。
+- **QEMU 网络端口映射**：`OSDK.toml` aarch64 scheme 新增 `hostfwd=tcp::8423-:8423,hostfwd=tcp::3000-:3000`（webui WS + dev server）。
+- **三平台启动验证**：
+  - **aarch64**：✅ 完整启动 → initramfs 解包 → dropbear 监听 port 22 → `/dev/fb0` 注册 → virtio-gpu scanout 320×240。无 OOPS。
+  - **riscv64**：⚠️→🔧 已修复代码（`init_no_rtc()` 绕过 + `early_println!` 诊断），需重建验证。
+  - **x86_64**：⚠️→🔧 已修复代码（microvm 切换 `grub.boot_protocol = "linux"` → bzImage），需重建验证。
+- **待办**：重建 initramfs（含 dropbear host key fix）→ 验证 SSH banner。
+
+## Refresh log 2026-07-15 #2 (dropbear host key 修复 + jh7110 + initramfs 路径修复)
+
+- **修复**：dropbear SSH host key 缺失（QEMU 2222 端口可连接但无 SSH banner）。
+  - `tests/initramfs/build_aarch64_rootfs.sh`（line 30-43）：构建时通过 qemu-aarch64-static → dropbearkey → ssh-keygen 三级 fallback 生成 ed25519 host key。
+  - `tests/initramfs/src/init_aarch64`（line 11-14）：启动时 fallback — 若 host key 不存在则用 `/sbin/dropbearkey` 生成。
+  - 顺便修复：`build_aarch64_rootfs.sh` 中 `test/initramfs/` → `tests/initramfs/` 路径 typo。
+- **jh7110 skeleton guard**：`packages/bsp/jh7110/src/lib.rs` 的 `compile_error!` 替换为 `#[deprecated]` no-op `init()`。
+- **已提交**：commit `416b136`。
+
+## Refresh log 2026-07-15 (vtable 修复 + 收尾清点)
+
+- **当前分支**：`dev` · **领先 `origin/dev` 1 commit**（vtable 修复）· 工作区仅剩 kei-echo agent 的 `packages/bsp/jh7110/src/lib.rs`
+- **最近提交**：`🔧 Fix PerOpenFileOps vtable dispatch on aarch64.` (`99e7d95`)
+- **已修复并验证**：
+  - **`PerOpenFileOps` vtable dispatch**（commit `99e7d95`）：aarch64 nightly-2026-05-01 下 `&dyn PerOpenFileOps → &dyn FileOps / &dyn Any` 的 trait upcast vtable 错误导致 EL1 data abort。改为：(1) `FileOps::read_at/write_at/readdir_at` 直接通过 `&dyn PerOpenFileOps` vtable 调用（supertrait 继承）；(2) `as_any()` 改为 `PerOpenFileOps` 必选方法，每个 implementor 显式写 `self`（按具体类型生成 vtable 条目，无 trait upcast 参与）。19 个 implementor + `inode_handle.rs` 同步。
+  - **`IoMem::base()` 算术溢出**（同 commit `99e7d95`）：线性映射在 high kernel half 的 `kva.start() + self.offset` 在 aarch64 触发 `attempt to add with overflow`。`base()`/`read_once()`/`write_once()` 改用 `wrapping_add`，与 `IoMem::new` 中的 `wrapping_sub` 配对。
+  - **QEMU 启动验证**：`SYS_OPENAT` / `SYS_SOCKET` / `SYS_BIND` / `SYS_LISTEN` / `SYS_WRITEV` 全部成功；dropbear listen 22 端口成功；**无 OOPS**。
+- **遗留疑问**：
+  1. ~~**dropbear SSH banner 缺失**~~ ✅ 已修复（commit `416b136`）：build script + init script 两级 host key 生成。需重建 initramfs 后验证 SSH banner。
+  2. **KEI_NO_DOM=1**：env var 由 `init_proc.rs` 推给用户空间 init 程序消费（用于 aris-render 跳过 DOM 创建）。本次修复的是**内核** vtable crash；用户空间 fontique/skrifa 的 vtable panic 仍未修（见 2026-07-15 早些时 kei-echo 的结论：fork 删除，转向修 kernel）。**保留** `KEI_NO_DOM=1` 不变。
+  3. **`O_APPEND` + `open_file` 交互**：仍为预存 FIXME（`read()` / `write_at()` 中有标记），与本次 vtable 修复无关，且涉及并发语义，需独立设计。
+  4. **`packages/bsp/jh7110/src/lib.rs`**：kei-echo agent 的 `compile_error!` → `#[deprecated]` no-op `init()` 已提交（commit `416b136`）。
+  5. **`packages/ostd/src/io/io_mem/mod.rs` 的"linear mapping workaround"** 是 aarch64 临时绕过方案（用 `wrapping_*` 算术恢复 linear_va），非通用正确实现。`FIXME: We currently do not limit the I/O memory allocator with the maximum GPA`（line 109）仍待修。
+- **后续动作**：
+  1. ~~验证网关模式~~ ✅ aarch64 启动链路通
+  2. ~~验证 vtable 修复~~ ✅ 全部 I/O syscall + dropbear listen
+  3. **下一步**：(a) 修复 dropbear host key 让 SSH 端到端通；(b) 视 kei-echo 决定是否合入 jh7110 修改；(c) 跨仓 `[patch]` 收敛到 `~/.cargo/config.toml`（aster 派生链共用）。
+- **跨仓依赖**：vtty 协议与 `kou` 对接；浏览器 UI 复用 `aris`；内核 fork 自 aster（见顶层 `patches/` 长期方案）。
+
+## Refresh log 2026-07-14
+
+- **当前分支**：`dev` · 领先 `origin/dev` 0 commits · 工作区干净
+- **最近提交**：`🔧 Gateway mode: aris vtty + WS JSON-RPC server.` (`0f42289`)
+- **未提交改动**：无
+- **后续动作**：
+  1. 验证网关模式：aris vtty + WS JSON-RPC 在工业 IoT 边缘硬件（aarch64）上端到端联通。
+  2. 固化 `kou` vtty 协议到 kei 的 init shell，作为终端接入面。
+  3. 跨仓 `[patch]` 收敛到 `~/.cargo/config.toml`（aster 派生链共用）。
+- **跨仓依赖**：vtty 协议与 `kou` 对接；浏览器 UI 复用 `aris`；内核 fork 自 aster（见顶层 `patches/` 长期方案）。
+
+## 0. 当前架构：网关模式（2026-07-14 最新）
+
+### 架构转变
+
+之前的"桌面 UI"路线（aris-render 预渲染桌面 → /dev/fb0 → QEMU SDL）存在根本性问题：
+1. **Vello CPU 光栅化质量无法接受**：软件光栅化的文字在所有分辨率下都偏糊，非 GPU 硬件渲染瓶颈
+2. **QEMU TCG 性能限制**：fb 写入极慢（~0.5ms/byte），实时交互不可行
+3. **复杂度与价值不匹配**：桌面 UI 的 tairitsu 组件 + Blitz/Vello 渲染管道极其复杂（24MB 字体、WASM SSR），但产出只是"看起来像桌面"的静态像素
+
+**新方向：网关模式**
+- kei 作为路由器/网关运行，提供 WS JSON-RPC 服务端口（8423）供 webui 连入
+- HMI 显示由远程 webui 承担（kei.celestia.world），kei 本机只显示简单的 aris-rendered vtty 终端（状态信息）
+- 鼠标/键盘交互暂不处理（待机状态），焦点在 WS JSON-RPC 协议和网络连通性
+
+### 已完成
+
+| 项目 | 状态 |
+|------|------|
+| **aarch64 内核启动** | ✅ 完整启动到用户空间 |
+| **virtio-gpu 硬件光标** | ✅ 内核层实现（CMD_UPDATE_CURSOR + CMD_MOVE_CURSOR），但 QEMU monitor mouse_button 不生成 EV_KEY |
+| **WS JSON-RPC 服务器** | ✅ 端口 8423 监听，WebSocket 握手 + JSON-RPC 2.0 协议，Kei.Ping/Kei.Status/Kei.InputEvent 方法 |
+| **aris-rendered vtty 显示** | ⚠️ 背景色渲染正常，**文字不渲染**（fontique/parley 字体注册问题） |
+| **主 poll 循环** | ✅ 多路复用 mouse_fd + ws_listen + ws_clients |
+| **IoMem 线性映射修复** | ✅ aarch64 virtio-mmio 设备探测和写入可用 |
+
+### 当前阻塞
+
+1. **vtty 文字渲染**：`render_html_with_font` 可渲染 CSS 颜色/背景，但文字节点无输出。`render_html`（catch_unwind 版本）触发 fontique panic 后降级到 fill_fallback 像素画。根因：(a) 24MB 全字体过大导致 parley::fontique 注册失败，(b) 86KB 子集字体注册成功但 paint_scene 不渲染文字节点。
+2. **riscv64 内核**：`core::unicode::conversions` 除零 panic（rustc 在 riscv64imac-unknown-none-elf 上的已知 bug）
+3. **x86_64 内核**：64-bit multiboot1 ELF 无法用 QEMU -kernel 加载
+
+### 后续计划
+
+1. **vtty 文字渲染修复**：调查 `render_html` vs `render_html_with_font` 文字渲染差异。可能从 Blitz DOM 切换到更简单的渲染方式，或使用预渲染文字位图。
+2. **webui 集成**：kei.celestia.world 托管 webui 前端页面，通过 WS JSON-RPC 连接 kei 网关。页面加载后自动握手。
+3. **HMI 远期**：aris 嵌入 webui，通过 WebRTC 推流 aris-render 输出到浏览器。HMI 由 webui 控制打开。
+4. **riscv64 + x86_64**：kernel 侧 bug 需工具链/内核修复，短期无法解决。先聚焦 aarch64。
 
 ### WSL2 QEMU 全流程打通：启动→aris-render→scanout 像素上屏（2026-07-12）🎉
 

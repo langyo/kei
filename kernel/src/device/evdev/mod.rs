@@ -290,7 +290,7 @@ impl InputHandlerClass for EvdevHandlerClass {
     }
 }
 
-pub(super) fn init_in_first_kthread() {
+pub fn init_in_first_kthread() {
     use aster_input::input_handler::RegisteredInputHandlerClass;
 
     static EVDEV_MAJOR: Once<MajorIdOwner> = Once::new();

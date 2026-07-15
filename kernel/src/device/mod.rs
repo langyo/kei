@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-mod evdev;
+pub mod evdev;
 pub mod fb;
 pub(crate) mod mem;
 pub mod misc;

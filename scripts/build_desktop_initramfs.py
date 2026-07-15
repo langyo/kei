@@ -8,20 +8,27 @@ For each target architecture, produces a newc-format cpio.gz where:
 No busybox/sh is required: kei_desktop is the init and writes to /dev/fb0
 directly. This avoids the musl/TLS crashes that busybox triggers on kei.
 
+The aris repository location is resolved from (in priority order):
+  1. The ARIS_REPO environment variable (set in .env, auto-loaded by just)
+  2. A sibling ``aris`` directory next to kei (legacy default)
+
 Usage:
     python3 build_desktop_initramfs.py aarch64
     python3 build_desktop_initramfs.py riscv64
     python3 build_desktop_initramfs.py x86_64
     python3 build_desktop_initramfs.py all      # build all three
+    python3 build_desktop_initramfs.py aarch64 --build  # compile aris first
 """
 import os
 import sys
 import gzip
 import shutil
 import tempfile
+import subprocess
 
 KEI = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ARIS = os.path.join(os.path.dirname(KEI), "aris")
+# Resolve the aris repo path: ARIS_REPO env var takes priority, then sibling fallback.
+ARIS = os.environ.get("ARIS_REPO") or os.path.join(os.path.dirname(KEI), "aris")
 BUILD_DIR = os.path.join(KEI, "tests", "initramfs", "build")
 sys.path.insert(0, os.path.join(KEI, "tests", "initramfs"))
 from build_aarch64_cpio import build  # noqa: E402
@@ -113,11 +120,70 @@ def _compile_idle_init(src: str, arch: str, rootfs: str) -> str:
         raise RuntimeError(f"could not compile init_idle.c for {arch}")
 
 
+def build_aris_binary(arch: str):
+    """Cross-compile the aris-render kei_desktop binary for the target arch.
+
+    Runs ``cargo build --release --target <triple> --bin kei_desktop`` inside
+    the aris repo (at ARIS). On Windows this re-execs through WSL since the
+    musl self-contained linker needs a POSIX environment.
+    """
+    triple = ARCHES[arch]
+    print(f"[build-aris] compiling kei_desktop for {triple} in {ARIS}")
+    if not os.path.isdir(ARIS):
+        raise FileNotFoundError(
+            f"aris repo not found at {ARIS}. Set ARIS_REPO in .env "
+            f"(see .env.example)."
+        )
+
+    is_windows = sys.platform == "win32"
+    if is_windows:
+        # Re-exec inside WSL so cargo + rust-lld self-contained musl linking works.
+        # Convert Windows path → /mnt/x/... WSL path.
+        aris_wsl = ARIS.replace("\\", "/")
+        import re
+        aris_wsl = re.sub(r"^([A-Za-z]):", lambda m: f"/mnt/{m.group(1).lower()}", aris_wsl)
+        cmd = [
+            "wsl", "-d", "Ubuntu-24.04", "--", "bash", "-lc",
+            f'cd "{aris_wsl}" && source ~/.cargo/env 2>/dev/null && '
+            f'cargo build --release --target {triple} --bin kei_desktop'
+        ]
+    else:
+        cmd = [
+            "cargo", "build", "--release",
+            "--target", triple, "--bin", "kei_desktop",
+        ]
+        os.chdir(ARIS)
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    if result.returncode != 0:
+        print(f"[build-aris] FAILED (exit {result.returncode})")
+        print(result.stdout[-2000:] if result.stdout else "")
+        print(result.stderr[-2000:] if result.stderr else "")
+        raise RuntimeError(f"aris build failed for {arch}")
+
+    bin_path = os.path.join(ARIS, "target", triple, "release", "kei_desktop")
+    if not os.path.exists(bin_path):
+        raise FileNotFoundError(f"kei_desktop not found after build: {bin_path}")
+    print(f"[build-aris] OK: {bin_path} ({os.path.getsize(bin_path)} bytes)")
+    return bin_path
+
+
 def main():
     os.makedirs(BUILD_DIR, exist_ok=True)
-    args = sys.argv[1:] or ["all"]
+    args = sys.argv[1:]
+    do_build = "--build" in args
+    args = [a for a in args if a != "--build"]
+    if not args:
+        args = ["all"]
     if "all" in args:
         args = list(ARCHES.keys())
+
+    # If --build was requested, compile aris for each requested arch first.
+    if do_build:
+        for arch in args:
+            if arch in ARCHES:
+                build_aris_binary(arch)
+
     ok = []
     for arch in args:
         if arch not in ARCHES:

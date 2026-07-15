@@ -115,7 +115,7 @@ def main() -> int:
     # Verify kei tree is populated
     if not (PROJECT_ROOT / "packages/ostd").exists():
         cf.fail("kei tree not populated (ostd/ missing)")
-        cf.info("  Run: just vendor && just pull-arm64")
+        cf.info("  Run: just vendor && just pull arm64")
         return 1
 
     cf.blank()

@@ -212,6 +212,31 @@ unsafe extern "C" fn trap_handler_el0(f: &mut TrapFrame) {
                 );
             }
         }
+        // EC = 0x22: PC alignment fault — deliver SIGBUS.
+        // EC = 0x26: SP alignment fault — deliver SIGBUS.
+        0x22 | 0x26 => {
+            let ctx_ptr = trap::CURRENT_USER_CTX.load();
+            if ctx_ptr != 0 {
+                let raw_ctx = unsafe { &mut *(ctx_ptr as *mut RawUserContext) };
+                raw_ctx.general = f.general;
+                raw_ctx.elr_el1 = f.elr_el1;
+                raw_ctx.spsr_el1 = f.spsr_el1;
+                f.elr_el1 = run_user_done_addr();
+                f.spsr_el1 = 0x3C5;
+            }
+        }
+        // EC = 0x18: Trapped MSR/MRS/system register access — deliver SIGILL.
+        0x18 => {
+            let ctx_ptr = trap::CURRENT_USER_CTX.load();
+            if ctx_ptr != 0 {
+                let raw_ctx = unsafe { &mut *(ctx_ptr as *mut RawUserContext) };
+                raw_ctx.general = f.general;
+                raw_ctx.elr_el1 = f.elr_el1;
+                raw_ctx.spsr_el1 = f.spsr_el1;
+                f.elr_el1 = run_user_done_addr();
+                f.spsr_el1 = 0x3C5;
+            }
+        }
         // EC = 0x3C: BRK instruction (debug breakpoint) from AArch64
         0x3C => {
             // BRK is used for debugging; on user side it generates SIGTRAP.

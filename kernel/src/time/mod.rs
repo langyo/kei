@@ -27,21 +27,23 @@ const USEC_PER_SEC: i64 = 1_000_000;
 pub const NSEC_PER_SEC: i64 = 1_000_000_000;
 
 pub(super) fn init() {
-    // On aarch64, system_time::init and the normal clocks::init depend on the
-    // aster_time component (RTC driver + TSC clocksource), which is bypassed
-    // because the inventory-based component system isn't wired up. Calling
-    // them panics (read_start_time().unwrap() on an uninitialized singleton).
-    // Instead, initialize the clock singletons with default values via
-    // clocks::system_wide::init_no_rtc (mirrors init_for_ktest), and
-    // cpu_time_stats (no RTC dependency). softirq is skipped (it registers a
-    // timer callback that needs the full timer subsystem).
-    #[cfg(not(target_arch = "aarch64"))]
+    // On aarch64 and riscv64, system_time::init and the normal clocks::init
+    // depend on the aster_time component (RTC driver + TSC clocksource), which
+    // is bypassed because the inventory-based component system isn't wired up
+    // on qemu-direct boot paths. Calling them panics (read_start_time().unwrap()
+    // on an uninitialized singleton). Instead, initialize the clock singletons
+    // with default values via clocks::system_wide::init_no_rtc (mirrors
+    // init_for_ktest), and cpu_time_stats (no RTC dependency). softirq is
+    // skipped (it registers a timer callback that needs the full timer
+    // subsystem). On riscv64, the softirq path also risks triggering the
+    // core::unicode::conversions div-by-zero panic.
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     {
         system_time::init();
         clocks::init();
         softirq::init();
     }
-    #[cfg(target_arch = "aarch64")]
+    #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
     {
         system_time::init_no_rtc();
         clocks::init_no_rtc();

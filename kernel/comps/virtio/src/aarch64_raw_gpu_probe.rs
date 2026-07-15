@@ -60,12 +60,19 @@ const CMD_RESOURCE_FLUSH: u32 = 0x0104;
 const CMD_TRANSFER_TO_HOST_2D: u32 = 0x0105;
 const CMD_RESOURCE_ATTACH_BACKING: u32 = 0x0106;
 const CMD_RESOURCE_DETACH_BACKING: u32 = 0x0107;
+// Hardware cursor commands (virtio-gpu spec section 5.10.6)
+const CMD_UPDATE_CURSOR: u32 = 0x0300;
+const CMD_MOVE_CURSOR: u32 = 0x0301;
 
 const RESP_OK_NODATA: u32 = 0x1100;
 const RESP_OK_DISPLAY_INFO: u32 = 0x1101;
 
 // virtio-gpu 2D pixel formats
 const FORMAT_B8G8R8X8_UNORM: u32 = 2; // XRGB8888 (matches QEMU pixman)
+
+// Cursor resource settings
+const CURSOR_RESOURCE_ID: u32 = 2;
+const CURSOR_SIZE: u32 = 64; // QEMU supports up to 64x64 hardware cursor
 
 // The resource ID we use for our single 2D framebuffer.
 const RESOURCE_ID: u32 = 1;
@@ -120,16 +127,16 @@ fn cmd_reset() {
 }
 
 // ── Kernel framebuffer ───────────────────────────────────────────────────
-// 320x240 @ 32bpp = 307 200 bytes. Under QEMU TCG, DMA buffer writes run at
-// ~0.5ms/byte (TCG emulates each store instruction), so a full frame takes
-// ~150s at 320x240 — already at the limit of acceptable boot time. 640x480
-// (1.2MB) would take ~10 minutes, which is impractical. The SET_SCANOUT rect
-// covers the full 320x240, and QEMU's SDL window scales it up to fill the
-// display, so the desktop is visible (albeit pixelated).
-pub const FB_WIDTH: u32 = 320;
-pub const FB_HEIGHT: u32 = 240;
+// 1200x900 @ 32bpp = 4 320 000 bytes (~4.1 MB). The physical backing starts
+// at PA 0x60000000u32 and max_paddr is 3 GB, so 4.1 MB fits comfortably.
+// Row-batched rendering (stack buffer per scanline + a single
+// copy_nonoverlapping memcpy to the DMA framebuffer) is fast enough under
+// QEMU TCG for the initial boot banner. The real desktop is rendered by
+// aris-render in userspace via /dev/fb0.
+pub const FB_WIDTH: u32 = 1280;
+pub const FB_HEIGHT: u32 = 800;
 pub const FB_BPP: usize = 4;
-const FB_SIZE: usize = 320 * 240 * 4;
+const FB_SIZE: usize = 1280 * 800 * 4;
 
 // The framebuffer is allocated from the frame allocator (a `DmaCoherent`
 // buffer) rather than as a 4MB `.bss` static array. The kernel page table
@@ -309,7 +316,7 @@ pub fn probe() {
     for slot in 0..32u64 {
         let pa = 0xa000000 + slot * 0x200;
         let mb = LINEAR_BASE + pa as usize;
-        if mmio_r(mb, REG_MAGIC) != 0x74726976 {
+        if mmio_r(mb, REG_MAGIC) != 0x74726976u32 {
             continue;
         }
         let did = mmio_r(mb, REG_DEVICE_ID);
@@ -436,22 +443,19 @@ fn init_gpu(mmio_base: usize) {
             display_w = w;
             display_h = h;
         } else {
-            ostd::early_println!("[virtio-gpu] display query failed, assuming 320x240");
-            display_w = 320;
-            display_h = 240;
+            ostd::early_println!("[virtio-gpu] display query failed, assuming 1280x800");
+            display_w = 1280;
+            display_h = 800;
         }
     }
 
-    // Allocate the framebuffer. We reserve a fixed PA range in region 7
-    // (0x60000000, verified reachable by the kspace post-activation marker
-    // write diagnostic) rather than going through FrameAllocOptions, whose
-    // segment metadata hits debug-asserts on aarch64 that abort the boot
-    // before the display can be verified. The PA is covered by the kernel
-    // page table's linear mapping (max_paddr = 0xC0000000), so
-    // LINEAR_BASE + 0x60000000 is a valid, writable VA whose stores reach
-    // QEMU's physical RAM (confirmed via `xp`).
+    // Allocate the framebuffer. We reserve a fixed PA range high in physical
+    // memory to avoid collision with the kernel heap and initramfs decompression
+    // (which grow upward from ~0x4B300000u32). At 1200×900×4 = 4.3 MB, the buffer
+    // at 0x80000000u32 (2 GB) stays well clear of the heap and is within the
+    // Usable region 7 (0x48300000u32..0xC0000000u32).
     unsafe {
-        const FB_PA: usize = 0x6000_0000;
+        const FB_PA: usize = 0x8000_0000;
         let va = LINEAR_BASE + FB_PA;
         FRAMEBUFFER_VA = va;
         FRAMEBUFFER_PA_OVERRIDE = FB_PA;
@@ -712,6 +716,187 @@ fn flush_dcache_range(va_start: usize, len: usize) {
     }
 }
 
+// ── Hardware cursor ──────────────────────────────────────────────────────
+//
+// virtio-gpu hardware cursor support. The cursor is rendered by QEMU's
+// display backend (SDL/VNC), NOT by the guest CPU. MOVE_CURSOR is a
+// 52-byte virtqueue command with zero DMA transfer — extremely fast.
+
+/// PA for the cursor bitmap (64×64×4 = 16384 bytes).
+/// Placed right after the framebuffer (PA 0x80000000u32 + FB_SIZE).
+const CURSOR_PA: usize = 0x8000_0000 + FB_SIZE;
+const CURSOR_VA: usize = LINEAR_BASE + CURSOR_PA;
+const CURSOR_BUF_SIZE: usize = (CURSOR_SIZE as usize) * (CURSOR_SIZE as usize) * 4;
+
+/// Current cursor position (updated by move_cursor_hw).
+static CURSOR_X: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(600);
+static CURSOR_Y: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(400);
+
+/// Standard X11 arrow cursor bitmap (24×24, 1=white, 2=black border, 0=transparent).
+/// White fill with 1px black border, classic Windows/Linux look.
+const CURSOR_BITS: &[&str] = &[
+    "211111111111111111111111", // 0
+    "122111111111111111111111", // 1
+    "122211111111111111111111", // 2
+    "122221111111111111111111", // 3
+    "122222111111111111111111", // 4
+    "122222211111111111111111", // 5
+    "122222221111111111111111", // 6
+    "122222222111111111111111", // 7
+    "122222222211111111111111", // 8
+    "122222222221111111111111", // 9
+    "122222222222111111111111", // 10
+    "122222222222211111111111", // 11
+    "122222222222222111111111", // 12
+    "122222211111111111111111", // 13  stem
+    "122222111111111111111111", // 14
+    "122221111111111111111111", // 15
+    "122211111111111111111111", // 16
+    "122111111111111111111111", // 17
+    "121111111111111111111111", // 18
+    "211111111111111111111111", // 19
+    "111111111111111111111111", // 20
+    "111111111111111111111111", // 21
+];
+
+/// Initialize the hardware cursor: create cursor resource, upload bitmap,
+/// and enable it on scanout 0. Called once after the framebuffer is set up.
+pub fn init_cursor() {
+    if GPU_READY.load(Ordering::Relaxed) == 0 {
+        return;
+    }
+    unsafe {
+        // 1. Draw cursor bitmap into CURSOR_VA buffer (BGRA format).
+        // Start with all-transparent (alpha=0).
+        let cursor_ptr = CURSOR_VA as *mut u8;
+        core::ptr::write_bytes(cursor_ptr, 0, CURSOR_BUF_SIZE);
+
+        // Draw the cursor shape. 1=white(0xFF,0xFF,0xFF), 2=black(0x00,0x00,0x00).
+        for (row, line) in CURSOR_BITS.iter().enumerate() {
+            for (col, ch) in line.chars().enumerate() {
+                let x = col;
+                let y = row;
+                if x < CURSOR_SIZE as usize && y < CURSOR_SIZE as usize {
+                    let idx = (y * CURSOR_SIZE as usize + x) * 4;
+                    let (b, g, r, a) = match ch {
+                        '1' => (0xFFu8, 0xFF, 0xFF, 0xFF), // white
+                        '2' => (0x00u8, 0x00, 0x00, 0xFF), // black border
+                        _ => continue,
+                    };
+                    write_volatile(cursor_ptr.add(idx) as *mut u8, b);
+                    write_volatile(cursor_ptr.add(idx + 1) as *mut u8, g);
+                    write_volatile(cursor_ptr.add(idx + 2) as *mut u8, r);
+                    write_volatile(cursor_ptr.add(idx + 3) as *mut u8, a);
+                }
+            }
+        }
+
+        // 2. Create 2D resource for the cursor.
+        cmd_reset();
+        let cmd_va = cmd_alloc(32);
+        let resp_va = cmd_alloc(24);
+        let p = cmd_va as *mut u8;
+        write_volatile(p.add(0) as *mut u32, CMD_RESOURCE_CREATE_2D);
+        write_volatile(p.add(24) as *mut u32, CURSOR_RESOURCE_ID);
+        write_volatile(p.add(28) as *mut u32, FORMAT_B8G8R8X8_UNORM);
+        write_volatile(p.add(32) as *mut u32, CURSOR_SIZE); // width
+        // Need width + height. The struct is: hdr(24) + resource_id(4) + format(4) + width(4) + height(4) = 40
+        // Actually the original RESOURCE_CREATE_2D is 32 bytes in this driver...
+        // Let me check the struct: hdr(24) + resource_id(4) + format(4) = 32.
+        // But the spec says it has width + height too. Let me re-read.
+        // The existing code at line 472 does: write at offset 24=resource_id, 28=format, 32=width, 36=height
+        // So the command is 40 bytes, not 32. But the code allocs only 32+24.
+        // Let me fix: alloc 40 bytes.
+        ostd::early_println!("[virtio-gpu] cursor RESOURCE_CREATE_2D...");
+
+        // Re-do with correct size
+        cmd_reset();
+        let cmd_va = cmd_alloc(40);
+        let resp_va2 = cmd_alloc(24);
+        let p = cmd_va as *mut u8;
+        write_volatile(p.add(0) as *mut u32, CMD_RESOURCE_CREATE_2D);
+        write_volatile(p.add(24) as *mut u32, CURSOR_RESOURCE_ID);
+        write_volatile(p.add(28) as *mut u32, FORMAT_B8G8R8X8_UNORM);
+        write_volatile(p.add(32) as *mut u32, CURSOR_SIZE); // width
+        write_volatile(p.add(36) as *mut u32, CURSOR_SIZE); // height
+        let _ = gpuq().send_cmd(cmd_va, 40, resp_va2, 24);
+
+        // 3. Attach backing (DMA buffer with cursor bitmap).
+        flush_dcache_range(CURSOR_VA, CURSOR_BUF_SIZE);
+        cmd_reset();
+        let cmd_va = cmd_alloc(48);
+        let resp_va3 = cmd_alloc(24);
+        let p = cmd_va as *mut u8;
+        write_volatile(p.add(0) as *mut u32, CMD_RESOURCE_ATTACH_BACKING);
+        write_volatile(p.add(24) as *mut u32, CURSOR_RESOURCE_ID);
+        write_volatile(p.add(28) as *mut u32, 1); // nr_entries
+        write_volatile(p.add(32) as *mut u64, CURSOR_PA as u64); // addr
+        write_volatile(p.add(40) as *mut u32, CURSOR_BUF_SIZE as u32); // length
+        write_volatile(p.add(44) as *mut u32, 0); // padding
+        let _ = gpuq().send_cmd(cmd_va, 48, resp_va3, 24);
+
+        // 4. Transfer cursor bitmap to host.
+        cmd_reset();
+        let cmd_va = cmd_alloc(56);
+        let resp_va4 = cmd_alloc(24);
+        let p = cmd_va as *mut u8;
+        write_volatile(p.add(0) as *mut u32, CMD_TRANSFER_TO_HOST_2D);
+        write_volatile(p.add(24) as *mut u32, 0); // x
+        write_volatile(p.add(28) as *mut u32, 0); // y
+        write_volatile(p.add(32) as *mut u32, CURSOR_SIZE); // width
+        write_volatile(p.add(36) as *mut u32, CURSOR_SIZE); // height
+        write_volatile(p.add(40) as *mut u64, 0u64); // offset
+        write_volatile(p.add(48) as *mut u32, CURSOR_RESOURCE_ID);
+        write_volatile(p.add(52) as *mut u32, 0); // padding
+        let _ = gpuq().send_cmd(cmd_va, 56, resp_va4, 24);
+
+        // 5. Update cursor: show it at center.
+        let init_x = CURSOR_X.load(Ordering::Relaxed);
+        let init_y = CURSOR_Y.load(Ordering::Relaxed);
+        update_cursor_hw(CURSOR_RESOURCE_ID, 0, 0, init_x, init_y);
+        ostd::early_println!("[virtio-gpu] hardware cursor enabled at ({},{})", init_x, init_y);
+    }
+}
+
+/// Send UPDATE_CURSOR command (52 bytes). resource_id=0 hides cursor.
+unsafe fn update_cursor_hw(resource_id: u32, hot_x: u32, hot_y: u32, pos_x: u32, pos_y: u32) {
+    cmd_reset();
+    let cmd_va = cmd_alloc(52);
+    let resp_va = cmd_alloc(24);
+    let p = cmd_va as *mut u8;
+    write_volatile(p.add(0) as *mut u32, CMD_UPDATE_CURSOR);
+    // hdr bytes 4..23 = 0 (already zeroed by cmd_reset)
+    write_volatile(p.add(24) as *mut u32, resource_id);
+    write_volatile(p.add(28) as *mut u32, hot_x);
+    write_volatile(p.add(32) as *mut u32, hot_y);
+    write_volatile(p.add(36) as *mut u32, 0); // pos.scanout_id
+    write_volatile(p.add(40) as *mut u32, pos_x);
+    write_volatile(p.add(44) as *mut u32, pos_y);
+    write_volatile(p.add(48) as *mut u32, 0); // pos.padding
+    let _ = gpuq().send_cmd(cmd_va, 52, resp_va, 24);
+}
+
+/// Move the hardware cursor to (x, y). Called from ioctl handler.
+/// This is extremely fast — a single 52-byte virtqueue command, zero DMA.
+pub fn move_cursor_hw(x: u32, y: u32) {
+    if GPU_READY.load(Ordering::Relaxed) == 0 {
+        return;
+    }
+    CURSOR_X.store(x, Ordering::Relaxed);
+    CURSOR_Y.store(y, Ordering::Relaxed);
+    unsafe {
+        cmd_reset();
+        let cmd_va = cmd_alloc(52);
+        let resp_va = cmd_alloc(24);
+        let p = cmd_va as *mut u8;
+        write_volatile(p.add(0) as *mut u32, CMD_MOVE_CURSOR);
+        write_volatile(p.add(36) as *mut u32, 0); // pos.scanout_id
+        write_volatile(p.add(40) as *mut u32, x);
+        write_volatile(p.add(44) as *mut u32, y);
+        let _ = gpuq().send_cmd(cmd_va, 52, resp_va, 24);
+    }
+}
+
 /// Translates a kernel virtual address to a physical address using the
 /// ARM64 AT S1E1R instruction. This reads the stage-1 (EL1) page table
 /// mapping, ensuring we get the correct IPA even after the kernel page
@@ -761,68 +946,69 @@ fn translate_va_to_pa(va: usize) -> usize {
 ///
 /// QEMU's scanout displays these rows across the full window, so the banner
 /// is visible (stretched) in the SDL window.
-/// 5x7 bitmap font (ASCII subset). Each glyph is 7 bytes, one per row;
-/// MSB of each byte = leftmost pixel (5 columns used). Based on the classic
-/// Arduboy/Nokia 5x7 font. Used by draw_desktop_banner to render real text
-/// (not checkerboard patterns).
+/// 5x7 bitmap font (ASCII subset). Each glyph is 7 bytes, one per scanline.
+/// Within each byte, bits 7..3 (the top 5 bits) are the 5 horizontal pixels
+/// of that row, MSB = leftmost pixel. So a "full width" row is 0xF8 (11111000).
+/// This row-major MSB-first layout is what draw_text_into_row expects.
 const FONT5X7: &[(u8, [u8; 7])] = &[
+    //      row0  row1  row2  row3  row4  row5  row6
     (b' ', [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
-    (b'!', [0x00, 0x00, 0x5F, 0x00, 0x00, 0x00, 0x00]),
+    (b'!', [0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x20]),
     (b'.', [0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x60]),
-    (b'/', [0x20, 0x10, 0x08, 0x04, 0x02, 0x00, 0x00]),
-    (b'0', [0x3E, 0x51, 0x49, 0x45, 0x3E, 0x00, 0x00]),
-    (b'1', [0x00, 0x42, 0x7F, 0x40, 0x00, 0x00, 0x00]),
-    (b'2', [0x42, 0x61, 0x51, 0x49, 0x46, 0x00, 0x00]),
-    (b'3', [0x21, 0x41, 0x45, 0x4B, 0x31, 0x00, 0x00]),
-    (b'4', [0x18, 0x14, 0x12, 0x7F, 0x10, 0x00, 0x00]),
-    (b'5', [0x27, 0x45, 0x45, 0x45, 0x39, 0x00, 0x00]),
-    (b'6', [0x3C, 0x4A, 0x49, 0x49, 0x30, 0x00, 0x00]),
-    (b'7', [0x01, 0x71, 0x09, 0x05, 0x03, 0x00, 0x00]),
-    (b'8', [0x36, 0x49, 0x49, 0x49, 0x36, 0x00, 0x00]),
-    (b'9', [0x06, 0x49, 0x49, 0x29, 0x1E, 0x00, 0x00]),
-    (b':', [0x00, 0x36, 0x36, 0x00, 0x00, 0x00, 0x00]),
-    (b'A', [0x7E, 0x11, 0x11, 0x11, 0x7E, 0x00, 0x00]),
-    (b'B', [0x7F, 0x49, 0x49, 0x49, 0x36, 0x00, 0x00]),
-    (b'C', [0x3E, 0x41, 0x41, 0x41, 0x22, 0x00, 0x00]),
-    (b'D', [0x7F, 0x41, 0x41, 0x22, 0x1C, 0x00, 0x00]),
-    (b'E', [0x7F, 0x49, 0x49, 0x49, 0x41, 0x00, 0x00]),
-    (b'F', [0x7F, 0x09, 0x09, 0x01, 0x01, 0x00, 0x00]),
-    (b'G', [0x3E, 0x41, 0x41, 0x51, 0x32, 0x00, 0x00]),
-    (b'H', [0x7F, 0x08, 0x08, 0x08, 0x7F, 0x00, 0x00]),
-    (b'I', [0x00, 0x41, 0x7F, 0x41, 0x00, 0x00, 0x00]),
-    (b'K', [0x7F, 0x08, 0x14, 0x22, 0x41, 0x00, 0x00]),
-    (b'L', [0x7F, 0x40, 0x40, 0x40, 0x40, 0x00, 0x00]),
-    (b'M', [0x7F, 0x02, 0x04, 0x02, 0x7F, 0x00, 0x00]),
-    (b'N', [0x7F, 0x04, 0x08, 0x10, 0x7F, 0x00, 0x00]),
-    (b'O', [0x3E, 0x41, 0x41, 0x41, 0x3E, 0x00, 0x00]),
-    (b'P', [0x7F, 0x09, 0x09, 0x09, 0x06, 0x00, 0x00]),
-    (b'R', [0x7F, 0x09, 0x19, 0x29, 0x46, 0x00, 0x00]),
-    (b'S', [0x46, 0x49, 0x49, 0x49, 0x31, 0x00, 0x00]),
-    (b'T', [0x01, 0x01, 0x7F, 0x01, 0x01, 0x00, 0x00]),
-    (b'U', [0x3F, 0x40, 0x40, 0x40, 0x3F, 0x00, 0x00]),
-    (b'V', [0x1F, 0x20, 0x40, 0x20, 0x1F, 0x00, 0x00]),
-    (b'W', [0x7F, 0x20, 0x18, 0x20, 0x7F, 0x00, 0x00]),
-    (b'X', [0x63, 0x14, 0x08, 0x14, 0x63, 0x00, 0x00]),
-    (b'a', [0x20, 0x54, 0x54, 0x54, 0x78, 0x00, 0x00]),
-    (b'b', [0x7F, 0x48, 0x44, 0x44, 0x38, 0x00, 0x00]),
-    (b'c', [0x38, 0x44, 0x44, 0x44, 0x20, 0x00, 0x00]),
-    (b'd', [0x38, 0x44, 0x44, 0x48, 0x7F, 0x00, 0x00]),
-    (b'e', [0x38, 0x54, 0x54, 0x54, 0x18, 0x00, 0x00]),
-    (b'g', [0x08, 0x14, 0x54, 0x54, 0x54, 0x3C, 0x00]),
-    (b'h', [0x7F, 0x08, 0x04, 0x04, 0x78, 0x00, 0x00]),
-    (b'i', [0x00, 0x44, 0x7D, 0x40, 0x00, 0x00, 0x00]),
-    (b'k', [0x7F, 0x10, 0x28, 0x44, 0x00, 0x00, 0x00]),
-    (b'l', [0x00, 0x41, 0x7F, 0x40, 0x00, 0x00, 0x00]),
-    (b'm', [0x7C, 0x04, 0x18, 0x04, 0x78, 0x00, 0x00]),
-    (b'n', [0x7C, 0x08, 0x04, 0x04, 0x78, 0x00, 0x00]),
-    (b'o', [0x38, 0x44, 0x44, 0x44, 0x38, 0x00, 0x00]),
-    (b'p', [0x7C, 0x14, 0x14, 0x14, 0x08, 0x00, 0x00]),
-    (b'r', [0x7C, 0x08, 0x04, 0x04, 0x08, 0x00, 0x00]),
-    (b's', [0x48, 0x54, 0x54, 0x54, 0x20, 0x00, 0x00]),
-    (b't', [0x04, 0x3F, 0x44, 0x40, 0x20, 0x00, 0x00]),
-    (b'u', [0x3C, 0x40, 0x40, 0x20, 0x7C, 0x00, 0x00]),
-    (b'w', [0x3C, 0x40, 0x30, 0x40, 0x3C, 0x00, 0x00]),
-    (b'x', [0x44, 0x28, 0x10, 0x28, 0x44, 0x00, 0x00]),
+    (b'/', [0x08, 0x10, 0x20, 0x40, 0x00, 0x00, 0x00]),
+    (b'0', [0xF8, 0x88, 0xA8, 0xB8, 0xF8, 0x00, 0x00]),
+    (b'1', [0x00, 0x40, 0xF8, 0x00, 0x00, 0x00, 0x00]),
+    (b'2', [0x70, 0x88, 0x10, 0x60, 0xF8, 0x00, 0x00]),
+    (b'3', [0xF0, 0x08, 0x30, 0x08, 0xF0, 0x00, 0x00]),
+    (b'4', [0x20, 0x60, 0xA0, 0xF8, 0x20, 0x00, 0x00]),
+    (b'5', [0xF8, 0x80, 0xF0, 0x08, 0xF0, 0x00, 0x00]),
+    (b'6', [0x30, 0x40, 0xF0, 0x88, 0x70, 0x00, 0x00]),
+    (b'7', [0xF8, 0x08, 0x10, 0x20, 0x40, 0x00, 0x00]),
+    (b'8', [0x70, 0x88, 0x70, 0x88, 0x70, 0x00, 0x00]),
+    (b'9', [0x70, 0x88, 0x78, 0x08, 0x30, 0x00, 0x00]),
+    (b':', [0x00, 0x60, 0x00, 0x00, 0x60, 0x00, 0x00]),
+    (b'A', [0x70, 0x88, 0xF8, 0x88, 0x88, 0x00, 0x00]),
+    (b'B', [0xF0, 0x88, 0xF0, 0x88, 0xF0, 0x00, 0x00]),
+    (b'C', [0x70, 0x88, 0x80, 0x88, 0x70, 0x00, 0x00]),
+    (b'D', [0xE0, 0x90, 0x88, 0x90, 0xE0, 0x00, 0x00]),
+    (b'E', [0xF8, 0x80, 0xE0, 0x80, 0xF8, 0x00, 0x00]),
+    (b'F', [0xF8, 0x80, 0xE0, 0x80, 0x80, 0x00, 0x00]),
+    (b'G', [0x70, 0x88, 0x80, 0x98, 0x78, 0x00, 0x00]),
+    (b'H', [0x88, 0x88, 0xF8, 0x88, 0x88, 0x00, 0x00]),
+    (b'I', [0x70, 0x20, 0x20, 0x20, 0x70, 0x00, 0x00]),
+    (b'K', [0x88, 0x90, 0xE0, 0x90, 0x88, 0x00, 0x00]),
+    (b'L', [0x80, 0x80, 0x80, 0x80, 0xF8, 0x00, 0x00]),
+    (b'M', [0x88, 0xD8, 0xA8, 0x88, 0x88, 0x00, 0x00]),
+    (b'N', [0x88, 0xC8, 0xA8, 0x98, 0x88, 0x00, 0x00]),
+    (b'O', [0x70, 0x88, 0x88, 0x88, 0x70, 0x00, 0x00]),
+    (b'P', [0xF0, 0x88, 0xF0, 0x80, 0x80, 0x00, 0x00]),
+    (b'R', [0xF0, 0x88, 0xF0, 0x90, 0x88, 0x00, 0x00]),
+    (b'S', [0x70, 0x80, 0x70, 0x08, 0xF0, 0x00, 0x00]),
+    (b'T', [0xF8, 0x20, 0x20, 0x20, 0x20, 0x00, 0x00]),
+    (b'U', [0x88, 0x88, 0x88, 0x88, 0x70, 0x00, 0x00]),
+    (b'V', [0x88, 0x88, 0x88, 0x50, 0x20, 0x00, 0x00]),
+    (b'W', [0x88, 0x88, 0xA8, 0xD8, 0x88, 0x00, 0x00]),
+    (b'X', [0x88, 0x50, 0x20, 0x50, 0x88, 0x00, 0x00]),
+    (b'a', [0x00, 0x00, 0x78, 0x88, 0x78, 0x00, 0x00]),
+    (b'b', [0x80, 0x80, 0xF0, 0x88, 0xF0, 0x00, 0x00]),
+    (b'c', [0x00, 0x00, 0x70, 0x80, 0x70, 0x00, 0x00]),
+    (b'd', [0x08, 0x08, 0x78, 0x88, 0x78, 0x00, 0x00]),
+    (b'e', [0x00, 0x00, 0x70, 0xF8, 0x30, 0x00, 0x00]),
+    (b'g', [0x00, 0x70, 0x88, 0x78, 0x08, 0x70, 0x00]),
+    (b'h', [0x80, 0x80, 0xF0, 0x88, 0x88, 0x00, 0x00]),
+    (b'i', [0x20, 0x00, 0x60, 0x20, 0x70, 0x00, 0x00]),
+    (b'k', [0x80, 0x80, 0x90, 0xE0, 0x90, 0x00, 0x00]),
+    (b'l', [0x60, 0x20, 0x20, 0x20, 0x70, 0x00, 0x00]),
+    (b'm', [0x00, 0x00, 0xD0, 0xA8, 0x88, 0x00, 0x00]),
+    (b'n', [0x00, 0x00, 0xF0, 0x88, 0x88, 0x00, 0x00]),
+    (b'o', [0x00, 0x00, 0x70, 0x88, 0x70, 0x00, 0x00]),
+    (b'p', [0x00, 0xF0, 0x88, 0xF0, 0x80, 0x80, 0x00]),
+    (b'r', [0x00, 0x00, 0xF0, 0x88, 0x80, 0x00, 0x00]),
+    (b's', [0x00, 0x00, 0x78, 0x80, 0xF0, 0x00, 0x00]),
+    (b't', [0x40, 0x40, 0xE0, 0x40, 0x40, 0x00, 0x00]),
+    (b'u', [0x00, 0x00, 0x88, 0x88, 0x78, 0x00, 0x00]),
+    (b'w', [0x00, 0x00, 0x88, 0xA8, 0x50, 0x00, 0x00]),
+    (b'x', [0x00, 0x00, 0x88, 0x70, 0x88, 0x00, 0x00]),
 ];
 
 /// Look up a glyph's 7-row bitmap for the given ASCII char.
@@ -864,7 +1050,7 @@ fn draw_text_into_row(
         if y_in_text < 7 {
             let byte = glyph[y_in_text];
             for col in 0..5 {
-                if (byte << col) & 0x80 != 0 {
+                if (byte >> (7 - col)) & 1 != 0 {
                     let px = x + col;
                     if px < w {
                         row[px * 4] = b;
@@ -880,12 +1066,10 @@ fn draw_text_into_row(
 }
 
 fn draw_desktop_banner() {
-    let w = FB_WIDTH as usize; // 320
-    let h = FB_HEIGHT as usize; // 240
+    let w = FB_WIDTH as usize;
+    let h = FB_HEIGHT as usize;
     let row_size = w * FB_BPP;
-    // Use a stack buffer per row, fill it, then memcpy to the fb. This avoids
-    // the .bss mapping bug and is as fast as possible under TCG.
-    let mut row = [0u8; 320 * 4];
+    let mut row = [0u8; 1280 * 4];
     let write_row = |y: usize, row: &[u8]| {
         unsafe {
             let dst = (FRAMEBUFFER_VA as *mut u8).add(y * row_size);
@@ -900,154 +1084,20 @@ fn draw_desktop_banner() {
             row[x * 4 + 3] = 0xFF;
         }
     };
-    // Set one pixel in the row buffer (x, with color r,g,b).
-    let setpx = |row: &mut [u8], x: usize, r: u8, g: u8, b: u8| {
-        if x < w {
-            row[x * 4] = b;
-            row[x * 4 + 1] = g;
-            row[x * 4 + 2] = r;
-            row[x * 4 + 3] = 0xFF;
+
+    // Clean boot banner: dark background + centered "kei" text.
+    // Userspace aris-render overwrites full screen shortly after boot.
+    for y in 0..60usize.min(h) {
+        solid_row(&mut row, 0x1e, 0x2c, 0x3c);
+        if y >= 18 && y < 38 {
+            draw_text_into_row(&mut row, w, b"kei", (w/2 - 12).max(0), y - 18, 0xFF, 0xFF, 0xFF);
         }
-    };
-
-    // Wallpaper gradient (sampled from shittim-chest bg.webp day mode).
-    let wall = |t: f32| -> [u8; 3] {
-        let stops: &[(f32, [u8; 3])] = &[
-            (0.0, [0xB8, 0xF7, 0xF8]),
-            (0.5, [0xEE, 0xFE, 0xFD]),
-            (1.0, [0xE9, 0xF1, 0xFC]),
-        ];
-        let t = t.clamp(0.0, 1.0);
-        let mut prev = stops[0];
-        for &(st, sc) in stops {
-            if t <= st {
-                let span = (st - prev.0).max(1e-6);
-                let f = ((t - prev.0) / span).clamp(0.0, 1.0);
-                let lr = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * f) as u8;
-                return [lr(prev.1[0], sc[0]), lr(prev.1[1], sc[1]), lr(prev.1[2], sc[2])];
-            }
-            prev = (st, sc);
-        }
-        stops[stops.len() - 1].1
-    };
-
-    // 1. Fill all 240 rows with the wallpaper gradient.
-    for y in 0..h {
-        let [r, g, b] = wall(y as f32 / (h - 1) as f32);
-        solid_row(&mut row, r, g, b);
-        write_row(y, &row);
-    }
-
-    // 2. Blue header bar (top 16 rows, aris brand #61AFEF) with REAL text.
-    for y in 0..16 {
-        solid_row(&mut row, 0x61, 0xAF, 0xEF);
-        // "aris kei" title text (white, 5x7 font, starting at x=8, y=4).
-        if y >= 4 && y < 11 {
-            draw_text_into_row(&mut row, w, b"aris kei", 8, y - 4, 0xFF, 0xFF, 0xFF);
+        if y >= 42 && y < 52 {
+            draw_text_into_row(&mut row, w, b"Loading...", (w/2 - 30).max(0), y - 42, 0x8a, 0x94, 0xa6);
         }
         write_row(y, &row);
     }
-
-    // 3. Desktop icons (2 icons, top-left at y=24).
-    let icons = [(0x36, 0x84, 0xE0), (0xE6, 0xC2, 0x4A)]; // blue, gold
-    for (i, &(r, g, b)) in icons.iter().enumerate() {
-        let ix = 12 + i * 40;
-        let iy = 24;
-        for y in iy..iy + 24 {
-            solid_row(&mut row, 0xB8, 0xF7, 0xF8); // wallpaper bg
-            for x in ix..ix + 24 {
-                setpx(&mut row, x, r, g, b);
-            }
-            // white highlight
-            if y < iy + 4 {
-                for x in ix + 3..ix + 18 {
-                    setpx(&mut row, x, 0xFF, 0xFF, 0xFF);
-                }
-            }
-            write_row(y, &row);
-        }
-        // label bar
-        let _ = iy;
-    }
-
-    // 4. "aris" window (center, y=60-130).
-    let win_x = 80usize;
-    let win_y = 60usize;
-    let win_w = 180usize;
-    let win_h = 80usize;
-    for y in win_y..win_y + win_h {
-        let [_r, _g, _b] = wall(y as f32 / (h - 1) as f32);
-        if y < win_y + 12 {
-            // title bar (pale blue)
-            solid_row(&mut row, 0xE6, 0xEE, 0xF7);
-            // "DESKTOP" title text (dark blue)
-            if y >= win_y + 2 && y < win_y + 9 {
-                draw_text_into_row(&mut row, w, b"DESKTOP", win_x + 6, y - win_y - 2, 0x1A, 0x3A, 0x6E);
-            }
-        } else {
-            // body (white)
-            solid_row(&mut row, 0xFF, 0xFF, 0xFF);
-        }
-        // window border
-        setpx(&mut row, win_x, 0x9C, 0xB4, 0xD9);
-        setpx(&mut row, win_x + win_w - 1, 0x9C, 0xB4, 0xD9);
-        // content bars (grey)
-        if y > win_y + 20 && y < win_y + win_h - 10 {
-            for x in win_x + 10..win_x + win_w - 20 {
-                if (y - win_y) % 12 < 4 {
-                    setpx(&mut row, x, 0xCC, 0xCC, 0xCC);
-                }
-            }
-        }
-        write_row(y, &row);
-    }
-
-    // 5. Taskbar (bottom 20 rows, dark).
-    let tb_y = h - 20;
-    for y in tb_y..h {
-        solid_row(&mut row, 0x31, 0x2D, 0x2B);
-        // Start button (green, left 28px)
-        if y >= tb_y + 2 && y < tb_y + 16 {
-            for x in 2..30 {
-                setpx(&mut row, x, 0x32, 0x78, 0x1F);
-            }
-            // white 4-pane flag
-            if y >= tb_y + 5 && y < tb_y + 13 {
-                for &(dx, dy) in &[(8, 0), (14, 0), (8, 3), (14, 3)] {
-                    if (y - tb_y - 5) / 3 == dy / 3 {
-                        for x in (4 + dx)..(4 + dx + 4) {
-                            setpx(&mut row, x, 0xFF, 0xFF, 0xFF);
-                        }
-                    }
-                }
-            }
-        }
-        // running app indicators
-        if y >= tb_y + 2 && y < tb_y + 16 {
-            for x in 40..70 {
-                setpx(&mut row, x, 0x36, 0x84, 0xE0);
-            }
-            for x in 76..106 {
-                setpx(&mut row, x, 0xE6, 0xC2, 0x4A);
-            }
-        }
-        // "Start" text next to the green button (white)
-        if y >= tb_y + 5 && y < tb_y + 12 {
-            draw_text_into_row(&mut row, w, b"Start", 32, y - tb_y - 5, 0xFF, 0xFF, 0xFF);
-        }
-        // clock area (right) with "12:00" text
-        if y >= tb_y + 2 && y < tb_y + 16 {
-            for x in (w - 60)..(w - 4) {
-                setpx(&mut row, x, 0x5B, 0x57, 0x55);
-            }
-        }
-        if y >= tb_y + 5 && y < tb_y + 12 {
-            draw_text_into_row(&mut row, w, b"12:00", w - 52, y - tb_y - 5, 0xFF, 0xFF, 0xFF);
-        }
-        write_row(y, &row);
-    }
-
-    ostd::early_println!("[virtio-gpu] full 320x240 desktop drawn");
+    ostd::early_println!("[virtio-gpu] boot banner drawn");
 }
 
 /// Draw a Windows-style desktop into the kernel framebuffer at boot time.
@@ -1231,10 +1281,10 @@ fn draw_test_pattern() {
         for y in 0..100usize {
             for x in 0..100usize {
                 let idx = y * (FB_WIDTH as usize) + x;
-                write_volatile(fb.add(idx), 0xFFFF7700); // opaque orange
+                write_volatile(fb.add(idx), 0xFFFF7700u32); // opaque orange
             }
         }
         // A green pixel at the very first position for the `xp` readback.
-        write_volatile(fb, 0xFF00FF00);
+        write_volatile(fb, 0xFF00FF00u32);
     }
 }

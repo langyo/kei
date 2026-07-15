@@ -106,6 +106,10 @@ impl FileOps for VtFile {
 
 #[inherit_methods(from = "self.0")]
 impl PerOpenFileOps for VtFile {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn ioctl(&self, raw_ioctl: RawIoctl) -> Result<i32>;
 
     fn check_seekable(&self) -> Result<()> {

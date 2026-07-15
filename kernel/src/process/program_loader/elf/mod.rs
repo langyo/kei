@@ -3,6 +3,7 @@
 mod elf_file;
 mod load_elf;
 mod relocate;
+mod tls;
 
 pub(super) use elf_file::ElfHeaders;
 pub(in crate::process) use load_elf::ElfLoadInfo;

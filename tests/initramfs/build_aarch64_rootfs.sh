@@ -11,7 +11,7 @@ rm -rf "$ROOTFS"
 mkdir -p "$ROOTFS"/{bin,sbin,etc/dropbear,dev,proc,sys,tmp,root,run,var/log}
 
 # busybox
-cp "$KEI_ROOT"/test/initramfs/busybox-aarch64 "$ROOTFS"/bin/busybox
+cp "$KEI_ROOT"/tests/initramfs/busybox-aarch64 "$ROOTFS"/bin/busybox
 chmod +x "$ROOTFS"/bin/busybox
 
 # busybox applet symlinks
@@ -27,8 +27,23 @@ cp "$DROPBEAR_SRC"/dropbear "$ROOTFS"/sbin/dropbear
 cp "$DROPBEAR_SRC"/dropbearkey "$ROOTFS"/sbin/dropbearkey
 chmod +x "$ROOTFS"/sbin/dropbear "$ROOTFS"/sbin/dropbearkey
 
+# dropbear host key (ed25519)
+HOST_KEY="$ROOTFS"/etc/dropbear/dropbear_ed25519_host_key
+HOST_KEY_GEN=0
+if command -v qemu-aarch64-static &>/dev/null; then
+    qemu-aarch64-static "$DROPBEAR_SRC"/dropbearkey -t ed25519 -f "$HOST_KEY" && HOST_KEY_GEN=1
+elif command -v dropbearkey &>/dev/null; then
+    dropbearkey -t ed25519 -f "$HOST_KEY" && HOST_KEY_GEN=1
+elif command -v ssh-keygen &>/dev/null; then
+    ssh-keygen -t ed25519 -N "" -C "kei@aarch64" -f "$HOST_KEY" && HOST_KEY_GEN=1
+fi
+if [ "$HOST_KEY_GEN" = 0 ]; then
+    echo "WARNING: dropbear host key not generated (missing qemu-aarch64-static / dropbearkey / ssh-keygen)."
+    echo "         The init script will generate it at boot time."
+fi
+
 # init script
-cp "$KEI_ROOT"/test/initramfs/src/init_aarch64 "$ROOTFS"/init
+cp "$KEI_ROOT"/tests/initramfs/src/init_aarch64 "$ROOTFS"/init
 chmod +x "$ROOTFS"/init
 
 # config files (dropbear needs getpwnam("root"))

@@ -92,19 +92,21 @@ pub(super) fn main() {
 }
 
 fn init() {
-    ostd::info!("arch::init");
+    ostd::early_println!("[init] arch::init...");
     crate::arch::init();
-    ostd::info!("cmdline::init");
-    #[cfg(target_arch = "aarch64")]
+    ostd::early_println!("[init] cmdline::init...");
+    #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
     {
-        // cmdline component init may not have run if Bootstrap failed
+        // cmdline component init may not have run if Bootstrap failed.
+        // riscv64 has the same issue: the inventory-based component system
+        // is unreliable on qemu-direct boot paths.
         aster_cmdline::init_no_component();
     }
-    ostd::info!("thread::init");
+    ostd::early_println!("[init] thread::init...");
     crate::thread::init();
-    ostd::info!("random::init");
+    ostd::early_println!("[init] random::init...");
     crate::util::random::init();
-    ostd::info!("driver::init");
+    ostd::early_println!("[init] driver::init...");
     // aarch64 and riscv64 defer driver init. On riscv64, aster_input's
     // all_devices() triggers a div-by-zero panic in core::unicode::conversions
     // (likely an uninitialized input device constant). Skipping driver init
@@ -116,10 +118,10 @@ fn init() {
     // early so they're available before any user-space process starts.
     #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
     crate::device::mem::init_in_first_kthread();
-    ostd::info!("time::init");
+    ostd::early_println!("[init] time::init...");
     crate::time::init();
-    // On aarch64, net::init() is deferred to init_in_first_kthread() so that
-    // all device components (virtio, network, vsock, softirq) are initialized
+    // On aarch64 and riscv64, net::init() is deferred to init_in_first_kthread() so
+    // that all device components (virtio, network, vsock, softirq) are initialized
     // by the component system's Kthread stage before the network stack probes
     // the virtio-net/vsock devices.
     #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
@@ -127,15 +129,15 @@ fn init() {
         ostd::info!("net::init");
         crate::net::init();
     }
-    ostd::info!("sched::init");
+    ostd::early_println!("[init] sched::init...");
     crate::sched::init();
-    ostd::info!("process::init");
+    ostd::early_println!("[init] process::init...");
     crate::process::init();
-    ostd::info!("fs::init");
+    ostd::early_println!("[init] fs::init...");
     crate::fs::init();
-    ostd::info!("security::init");
+    ostd::early_println!("[init] security::init...");
     crate::security::init();
-    ostd::info!("done");
+    ostd::early_println!("[init] done");
 }
 
 fn init_on_each_cpu() {
@@ -174,12 +176,14 @@ fn ap_init() {
 // the latency to switching from the idle task to a useful, runnable one.
 
 fn bsp_idle_loop() {
-    // Use early_println instead of ostd::info!: the log system routes output
-    // through the console component (all_devices), which isn't initialized on
-    // aarch64, so info!/println! would panic here.
+    // Use early_println instead of ostd::info! on arches where the log
+    // system routes output through uninitialized console components. On
+    // riscv64, ostd::info!() is suppressed entirely (unicode bug workaround).
     #[cfg(target_arch = "aarch64")]
     ostd::info!("Idle thread for CPU #0 started");
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(target_arch = "riscv64")]
+    ostd::early_println!("Idle thread for CPU #0 started");
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     ostd::info!("Idle thread for CPU #0 started");
 
     // Spawn the first non-idle kernel thread on BSP.
@@ -227,6 +231,8 @@ fn ap_idle_loop() {
 // The main function of the first (non-idle) kernel thread
 fn first_kthread() {
     ostd::info!("Spawn the first kernel thread");
+    #[cfg(target_arch = "riscv64")]
+    ostd::early_println!("[kthread] first kernel thread spawned");
 
     let init_mnt_ns = MountNamespace::get_init_singleton();
     let fs_resolver = init_mnt_ns.new_path_resolver();
@@ -284,7 +290,12 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
         let _ = aster_softirq::init_component_fn();
         let _ = aster_console::init_component_fn();
         let _ = aster_framebuffer::init_component_fn();
+        // Initialize the input core first (creates InputCore singleton),
+        // then register the evdev handler class (so it connects to devices
+        // when they're probed), then probe virtio devices.
         let _ = aster_input::init_component_fn();
+        ostd::early_println!("[kthread] evdev handler init (before virtio probe)");
+        crate::device::evdev::init_in_first_kthread();
         let _ = aster_network::init_component_fn();
         // virtio component init probes devices (needs FDT, which is available)
         let _ = aster_virtio::virtio_component_init_pub();
@@ -297,6 +308,9 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
             ostd::info!("framebuffer published OK");
             crate::device::fb::register_late();
             ostd::info!("/dev/fb0 registered");
+            // Initialize the hardware cursor after the framebuffer is published.
+            ostd::early_println!("[kthread] init hardware cursor");
+            aster_virtio::aarch64_raw_gpu_probe::init_cursor();
         } else {
             ostd::info!("WARNING: framebuffer not published");
         }

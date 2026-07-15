@@ -1,8 +1,8 @@
-<p align="center"><img src="https://raw.githubusercontent.com/celestia-island/kei/master/docs/logo.webp" alt="KEI" width="240" /></p>
+<p align="center"><img src="https://raw.githubusercontent.com/celestia-island/docs.celestia.world/dev/res/logo/kei.webp" alt="KEI" width="240" /></p>
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>Noyau OS Rust pour l'IoT industriel — dérivé d'Asterinas (星绽), avec bibliothèque no_std pour nœuds capteurs.</strong></p>
+<p align="center"><strong>Un noyau OS en Rust pour les appareils edge IoT industriels.</strong></p>
 
 <div align="center">
 
@@ -30,7 +30,7 @@
 
 KEI est un noyau OS Rust pour appareils edge ARM64 et RISC-V. Il inclut aussi une bibliothèque `#![no_std]` pour les nœuds capteurs embassy.
 
-KEI est dérivé d'[Asterinas (星绽)](https://github.com/asterinas/asterinas), un framekernel Rust.
+KEI est dérivé d'[Asterinas](https://github.com/asterinas/asterinas), un framekernel Rust.
 
 ## Contenu
 
@@ -45,10 +45,6 @@ KEI est dérivé d'[Asterinas (星绽)](https://github.com/asterinas/asterinas),
 just build        # Compiler pour la carte par défaut
 just test-all     # Test de démarrage QEMU
 ```
-
-## Écosystème
-
-- **[aris](https://github.com/celestia-island/aris)** — moteur de navigateur dérivé de servo
 
 ## Licence
 

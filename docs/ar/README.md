@@ -1,8 +1,8 @@
-<p align="center"><img src="https://raw.githubusercontent.com/celestia-island/kei/master/docs/logo.webp" alt="KEI" width="240" /></p>
+<p align="center"><img src="https://raw.githubusercontent.com/celestia-island/docs.celestia.world/dev/res/logo/kei.webp" alt="KEI" width="240" /></p>
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>نواة نظام تشغيل بـ Rust لإنترنت الأشياء الصناعي — مشتقة من Asterinas (星绽)، مع مكتبة no_std لعقد المستشعرات.</strong></p>
+<p align="center"><strong>نواة نظام تشغيل بـ Rust لأجهزة حافة إنترنت الأشياء الصناعي.</strong></p>
 
 <div align="center">
 
@@ -30,7 +30,7 @@
 
 KEI هو نواة نظام تشغيل بـ Rust لأجهزة الحافة ARM64 و RISC-V. يتضمن أيضًا مكتبة `#![no_std]` لعقد المستشعرات embassy.
 
-KEI مشتق من [Asterinas (星绽)](https://github.com/asterinas/asterinas)، نواة إطار بـ Rust.
+KEI مشتق من [Asterinas](https://github.com/asterinas/asterinas)، نواة إطار بـ Rust.
 
 ## المحتويات
 
@@ -45,10 +45,6 @@ KEI مشتق من [Asterinas (星绽)](https://github.com/asterinas/asterinas)،
 just build        # بناء للوحة الافتراضية
 just test-all     # اختبار إقلاع QEMU
 ```
-
-## النظام البيئي
-
-- **[aris](https://github.com/celestia-island/aris)** — محرك متصفح مشتق من servo
 
 ## الترخيص
 

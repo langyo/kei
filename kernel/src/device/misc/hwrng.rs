@@ -141,6 +141,10 @@ impl FileOps for HwRngFile {
 }
 
 impl PerOpenFileOps for HwRngFile {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn check_seekable(&self) -> Result<()> {
         Ok(())
     }

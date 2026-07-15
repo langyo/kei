@@ -23,4 +23,4 @@ git commit -m "vendor: absorb asterinas <sha>"
 ## 同步频率
 
 - 常规：每 3–6 个月
-- 紧急修复：`just vendor-ref <sha>`
+- 紧急修复：`just vendor <sha>`

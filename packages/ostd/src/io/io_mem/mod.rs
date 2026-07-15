@@ -108,7 +108,7 @@ impl<SecuritySensitivity> IoMem<SecuritySensitivity> {
             //  - The range `first_page_start..last_page_end` is always page aligned.
             //  - FIXME: We currently do not limit the I/O memory allocator with the maximum GPA,
             //    so the address range may not fall in the GPA limit.
-            //  - The caller guarantees that operations on the I/O memory do not have any side
+            //  - The caller of `IoMem::new()` ensures that operations on the I/O memory do not have any side
             //    effects that may cause soundness problems, so the pages can safely be viewed as
             //    untyped memory.
             unsafe { unprotect_gpa_tdvm_call(first_page_start, area_size).unwrap() };
@@ -126,6 +126,29 @@ impl<SecuritySensitivity> IoMem<SecuritySensitivity> {
             priv_flags,
         };
 
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            const DEVICE_LINEAR_BASE: usize = 0xffff_8000_0000_0000;
+
+            let kva = unsafe {
+                KVirtArea::map_untracked_frames(area_size, 0, frames_range.clone(), prop)
+            };
+            let linear_va = DEVICE_LINEAR_BASE + first_page_start;
+            let real_offset = range.start - first_page_start;
+            let linear_offset = linear_va.wrapping_sub(kva.start()) + real_offset;
+
+            return Self {
+                kvirt_area: Arc::new(kva),
+                offset: linear_offset,
+                limit: range.len(),
+                pa: range.start,
+                cache_policy: cache,
+                phantom: PhantomData,
+            };
+        }
+
+        #[cfg(not(target_arch = "aarch64"))]
         let kva = {
             // SAFETY: The caller of `IoMem::new()` ensures that the given
             // physical address range is I/O memory, so it is safe to map.
@@ -140,14 +163,15 @@ impl<SecuritySensitivity> IoMem<SecuritySensitivity> {
             kva
         };
 
-        Self {
+        #[cfg(not(target_arch = "aarch64"))]
+        return Self {
             kvirt_area: Arc::new(kva),
             offset: range.start - first_page_start,
             limit: range.len(),
             pa: range.start,
             cache_policy: cache,
             phantom: PhantomData,
-        }
+        };
     }
 
     /// Returns the cache policy of this `IoMem`.
@@ -156,8 +180,12 @@ impl<SecuritySensitivity> IoMem<SecuritySensitivity> {
     }
 
     /// Returns the base virtual address of the MMIO range.
+    ///
+    /// The `wrapping_*` arithmetic is intentional — on aarch64 the boot page
+    /// table's linear-mapping VA is recovered via offset arithmetic that may
+    /// traverse the kernel-half address boundary.
     fn base(&self) -> usize {
-        self.kvirt_area.deref().start() + self.offset
+        self.kvirt_area.deref().start().wrapping_add(self.offset)
     }
 
     /// Validates that the offset range lies within the MMIO window.
@@ -185,7 +213,7 @@ impl IoMem<Sensitive> {
     /// effects (e.g., corrupting the kernel memory).
     pub(crate) unsafe fn read_once<T: PodOnce>(&self, offset: usize) -> T {
         debug_assert!(offset + size_of::<T>() <= self.limit);
-        let ptr = (self.kvirt_area.deref().start() + self.offset + offset) as *const T;
+        let ptr = (self.kvirt_area.deref().start().wrapping_add(self.offset) + offset) as *const T;
         // SAFETY: The safety of the read operation's semantics is upheld by the caller.
         unsafe { read_once(ptr) }
     }
@@ -204,7 +232,7 @@ impl IoMem<Sensitive> {
     /// effects (e.g., corrupting the kernel memory).
     pub(crate) unsafe fn write_once<T: PodOnce>(&self, offset: usize, value: &T) {
         debug_assert!(offset + size_of::<T>() <= self.limit);
-        let ptr = (self.kvirt_area.deref().start() + self.offset + offset) as *mut T;
+        let ptr = (self.kvirt_area.deref().start().wrapping_add(self.offset) + offset) as *mut T;
         // SAFETY: The safety of the write operation's semantics is upheld by the caller.
         unsafe { write_once(ptr, *value) };
     }

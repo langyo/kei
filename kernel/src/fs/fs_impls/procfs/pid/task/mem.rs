@@ -126,6 +126,10 @@ impl FileOps for MemFileHandle {
 }
 
 impl PerOpenFileOps for MemFileHandle {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn check_seekable(&self) -> Result<()> {
         Ok(())
     }

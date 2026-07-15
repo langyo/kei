@@ -56,12 +56,12 @@ def main() -> int:
     check_dir(
         PROJECT_ROOT / "packages/ostd" / "src" / "arch" / "aarch64",
         "packages/ostd/src/arch/aarch64/",
-        "run 'just pull-arm64'",
+        "run 'just pull arm64'",
     )
 
     cf.blank()
     cf.ok("Setup complete")
-    cf.info("  Populate:  just vendor && just pull-arm64")
+    cf.info("  Populate:  just vendor && just pull arm64")
     cf.info("  Build:     just build")
     cf.info("  Test:      just test-all")
     return 0

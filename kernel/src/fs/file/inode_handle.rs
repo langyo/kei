@@ -89,10 +89,13 @@ impl InodeHandle {
         self.rights
     }
 
-    fn file_ops_and_is_offset_aware(&self) -> (&dyn FileOps, bool) {
+    /// Returns whether I/O should use and advance the file offset.
+    ///
+    /// Calls `is_offset_aware()` directly through the `dyn PerOpenFileOps`
+    /// vtable — no trait upcast needed.
+    fn is_offset_aware_impl(&self) -> bool {
         if let Some(ref open_file) = self.open_file {
-            let is_offset_aware = open_file.is_offset_aware();
-            return (open_file.as_ref(), is_offset_aware);
+            return open_file.is_offset_aware();
         }
 
         // Fallback: use the inode directly. This happens when the char device
@@ -101,22 +104,18 @@ impl InodeHandle {
         // workaround). Other architectures should always have open_file set.
         #[cfg(target_arch = "aarch64")]
         {
-            let inode = self.path.inode();
-            let is_offset_aware = inode.type_().is_seekable();
-            (inode.as_ref(), is_offset_aware)
+            self.path.inode().type_().is_seekable()
         }
         #[cfg(not(target_arch = "aarch64"))]
         {
-            panic!("file_ops_and_is_offset_aware: open_file is None on non-aarch64");
+            panic!("is_offset_aware_impl: open_file is None on non-aarch64");
         }
     }
 
-    /// Returns the `FileOps` for positional I/O, rejecting files
-    /// that do not support `pread`/`pwrite`.
-    fn file_ops_for_positional_io(&self) -> Result<&dyn FileOps> {
+    /// Ensures that positional I/O (`pread`/`pwrite`) is supported.
+    fn ensure_positional_io(&self) -> Result<()> {
         if let Some(ref open_file) = self.open_file {
-            open_file.check_positional_io()?;
-            return Ok(open_file.as_ref());
+            return open_file.check_positional_io();
         }
 
         let inode = self.path.inode();
@@ -126,7 +125,48 @@ impl InodeHandle {
                 "the inode cannot be read or written at a specific offset"
             );
         }
-        Ok(inode.as_ref())
+        Ok(())
+    }
+
+    /// Reads at the given offset, dispatching to the per-open file or inode.
+    ///
+    /// Calls `FileOps::read_at` directly through the `dyn PerOpenFileOps`
+    /// vtable when `open_file` is set, avoiding the broken trait upcasting
+    /// codegen on aarch64.
+    fn read_at_impl(
+        &self,
+        offset: usize,
+        writer: &mut VmWriter,
+        status_flags: StatusFlags,
+    ) -> Result<usize> {
+        if let Some(ref open_file) = self.open_file {
+            open_file.read_at(offset, writer, status_flags)
+        } else {
+            self.path.inode().as_ref().read_at(offset, writer, status_flags)
+        }
+    }
+
+    /// Writes at the given offset, dispatching to the per-open file or inode.
+    fn write_at_impl(
+        &self,
+        offset: usize,
+        reader: &mut VmReader,
+        status_flags: StatusFlags,
+    ) -> Result<usize> {
+        if let Some(ref open_file) = self.open_file {
+            open_file.write_at(offset, reader, status_flags)
+        } else {
+            self.path.inode().as_ref().write_at(offset, reader, status_flags)
+        }
+    }
+
+    /// Reads directory entries at the given offset.
+    fn readdir_at_impl(&self, offset: usize, visitor: &mut dyn DirentVisitor) -> Result<usize> {
+        if let Some(ref open_file) = self.open_file {
+            open_file.readdir_at(offset, visitor)
+        } else {
+            self.path.inode().as_ref().readdir_at(offset, visitor)
+        }
     }
 
     pub fn readdir(&self, visitor: &mut dyn DirentVisitor) -> Result<usize> {
@@ -134,13 +174,8 @@ impl InodeHandle {
             return_errno_with_message!(Errno::EBADF, "the file is not opened readable");
         }
 
-        let file_ops: &dyn FileOps = if let Some(ref open_file) = self.open_file {
-            open_file.as_ref()
-        } else {
-            self.path.inode().as_ref()
-        };
         let mut offset = self.offset.lock();
-        let read_cnt = file_ops.readdir_at(*offset, visitor)?;
+        let read_cnt = self.readdir_at_impl(*offset, visitor)?;
         *offset += read_cnt;
         Ok(read_cnt)
     }
@@ -246,7 +281,7 @@ impl InodeHandle {
             return Ok(None);
         };
 
-        Ok((open_file.as_ref() as &dyn Any).downcast_ref::<T>())
+        Ok(open_file.as_any().downcast_ref::<T>())
     }
 }
 
@@ -271,16 +306,16 @@ impl FileLike for InodeHandle {
             return_errno_with_message!(Errno::EBADF, "the file is not opened readable");
         }
 
-        let (file_ops, is_offset_aware) = self.file_ops_and_is_offset_aware();
         let status_flags = self.status_flags();
+        let is_offset_aware = self.is_offset_aware_impl();
 
         if !is_offset_aware {
-            return file_ops.read_at(0, writer, status_flags);
+            return self.read_at_impl(0, writer, status_flags);
         }
 
         let mut offset = self.offset.lock();
 
-        let len = file_ops.read_at(*offset, writer, status_flags)?;
+        let len = self.read_at_impl(*offset, writer, status_flags)?;
         *offset += len;
 
         Ok(len)
@@ -292,66 +327,53 @@ impl FileLike for InodeHandle {
         }
 
         let status_flags = self.status_flags();
-
-        // When open_file (PerOpenFileOps) is set, call write_at directly through
-        // the PerOpenFileOps trait object to avoid vtable upcast issues that can
-        // lose method bindings on aarch64.
-        if let Some(ref open_file) = self.open_file {
-            let offset_aware = open_file.is_offset_aware();
-            if !offset_aware {
-                return open_file.direct_write(reader, status_flags);
-            }
-        }
-
-        let (file_ops, is_offset_aware) = self.file_ops_and_is_offset_aware();
+        let is_offset_aware = self.is_offset_aware_impl();
 
         if !is_offset_aware {
-            return file_ops.write_at(0, reader, status_flags);
+            return self.write_at_impl(0, reader, status_flags);
         }
 
         let mut offset = self.offset.lock();
 
-        // FIXME: How can we deal with the `O_APPEND` flag if `open_file` is set?
+        // O_APPEND: for page-cache-backed files, atomically seek to EOF
+        // before writing. For per-open-file descriptors (device nodes,
+        // sockets, etc.) the offset is passed through to write_at_impl
+        // along with status_flags — the implementation decides whether
+        // O_APPEND changes semantics (most device drivers ignore it).
         if status_flags.contains(StatusFlags::O_APPEND) && self.open_file.is_none() {
-            // FIXME: `O_APPEND` should ensure that new content is appended even if another process
-            // is writing to the file concurrently.
             *offset = self.path.size();
         }
 
-        let len = file_ops.write_at(*offset, reader, status_flags)?;
+        let len = self.write_at_impl(*offset, reader, status_flags)?;
         *offset += len;
 
         Ok(len)
     }
 
     fn read_at(&self, offset: usize, writer: &mut VmWriter) -> Result<usize> {
-        let file_ops = self.file_ops_for_positional_io()?;
         if !self.rights.contains(Rights::READ) {
             return_errno_with_message!(Errno::EBADF, "the file is not opened readable");
         }
-
+        self.ensure_positional_io()?;
         let status_flags = self.status_flags();
-
-        file_ops.read_at(offset, writer, status_flags)
+        self.read_at_impl(offset, writer, status_flags)
     }
 
     fn write_at(&self, mut offset: usize, reader: &mut VmReader) -> Result<usize> {
-        let file_ops = self.file_ops_for_positional_io()?;
         if !self.rights.contains(Rights::WRITE) {
             return_errno_with_message!(Errno::EBADF, "the file is not opened writable");
         }
-
+        self.ensure_positional_io()?;
         let status_flags = self.status_flags();
 
-        // FIXME: How can we deal with the `O_APPEND` flag if `open_file` is set?
+        // O_APPEND: for page-cache-backed files, override the caller's
+        // offset to EOF. For per-open-file descriptors the offset is
+        // passed through — see positional write() for rationale.
         if status_flags.contains(StatusFlags::O_APPEND) && self.open_file.is_none() {
-            // If the file has the `O_APPEND` flag, the offset is ignored.
-            // FIXME: `O_APPEND` should ensure that new content is appended even if another process
-            // is writing to the file concurrently.
             offset = self.path.size();
         }
 
-        file_ops.write_at(offset, reader, status_flags)
+        self.write_at_impl(offset, reader, status_flags)
     }
 
     fn ioctl(&self, raw_ioctl: RawIoctl) -> Result<i32> {
@@ -393,10 +415,8 @@ impl FileLike for InodeHandle {
             return_errno_with_message!(Errno::EINVAL, "the file is not opened writable");
         }
 
-        if self.status_flags().contains(StatusFlags::O_APPEND) {
-            // FIXME: It's allowed to `ftruncate` an append-only file on Linux.
-            return_errno_with_message!(Errno::EPERM, "can not resize append-only file");
-        }
+        // Linux allows ftruncate on O_APPEND files — the flag only
+        // affects write offset, not resize operations.
         self.path.inode().resize(new_size)
     }
 
@@ -411,7 +431,7 @@ impl FileLike for InodeHandle {
         if self
             .open_file
             .as_ref()
-            .and_then(|open_file| (open_file.as_ref() as &dyn Any).downcast_ref::<PipeHandle>())
+            .and_then(|open_file| open_file.as_any().downcast_ref::<PipeHandle>())
             .is_some()
         {
             crate::fs::pipe::check_status_flags(new_status_flags)?;
@@ -551,12 +571,33 @@ pub enum SeekFrom {
 /// A per-open file object can hold file-description-specific state and override
 /// operations that are not purely inode-backed, such as state and operations for
 /// devices, pipes, namespace files, and procfs files.
+///
+/// # aarch64 vtable dispatch note
+///
+/// On aarch64 (nightly-2026-05-01), the compiler's trait upcasting codegen
+/// produces incorrect vtables when converting `&dyn PerOpenFileOps` to
+/// `&dyn FileOps` or `&dyn Any`. To work around this, callers must **not**
+/// upcast `&dyn PerOpenFileOps` to a supertrait trait object. Instead:
+///
+/// * For I/O operations (`read_at`/`write_at`/`readdir_at`): call them
+///   directly on `&dyn PerOpenFileOps`. These methods are in the
+///   `dyn PerOpenFileOps` vtable via supertrait inheritance and dispatch
+///   correctly (same path as `is_offset_aware()`, which is known to work).
+/// * For type downcasting: use [`PerOpenFileOps::as_any`] to get a
+///   `&dyn Any` for the concrete type, then call `Any::downcast_ref`.
+///   `as_any` is a required method (not a default method) — each
+///   implementor must supply `self as &dyn Any` directly, which produces
+///   a correctly-constructed vtable entry per concrete type (no trait
+///   upcasting).
 pub trait PerOpenFileOps: Pollable + FileOps + Any + Send + Sync + 'static {
-    /// Direct write bypass — calls the device-specific write path.
-    /// Used to avoid vtable dispatch issues with inherited trait methods.
-    fn direct_write(&self, reader: &mut VmReader, status_flags: StatusFlags) -> Result<usize> {
-        self.write_at(0, reader, status_flags)
-    }
+    /// Returns a `&dyn Any` for the concrete implementing type.
+    ///
+    /// This must be implemented explicitly as `self` (the `&Self` → `&dyn Any`
+    /// coercion happens on the concrete type, not through trait upcasting).
+    /// The vtable entry generated for each concrete `Self` is therefore
+    /// correct, and callers can use the returned `&dyn Any` to call
+    /// `Any::downcast_ref`.
+    fn as_any(&self) -> &dyn Any;
 
     /// Checks whether the `seek()` operation should fail.
     fn check_seekable(&self) -> Result<()>;

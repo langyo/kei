@@ -15,6 +15,14 @@ set windows-shell := ["bash.exe", "-c"]
 set unstable
 set lists
 
+# Auto-load .env so ARIS_REPO (and other config) is available in all recipes.
+# just >= 1.32 supports this natively; we're on 1.55.
+set dotenv-load := true
+
+# Path to the aris repository. Override via .env or shell env var.
+# Used by build-aris / build-desktop recipes and the initramfs scripts.
+ARIS_REPO := env_var_or_default("ARIS_REPO", "../aris")
+
 # Shared celestia-devtools recipes — NOT in git. This justfile references shared
 # variables, so the import is REQUIRED. Bootstrap once: celestia-devtools init
 # (or `just fetch` if already staged). Refresh after upgrades.
@@ -57,24 +65,35 @@ env-check:
 setup:
     {{python_cmd}} scripts/setup.py
 
-vendor:
-    {{python_cmd}} scripts/vendor_upstream.py
+# Vendor upstream asterinas into the tree.
+#   just vendor          # latest
+#   just vendor <ref>    # specific git ref
+vendor *ARGS='':
+    {{python_cmd}} scripts/vendor_upstream.py {{ARGS}}
 
-vendor-ref REF:
-    {{python_cmd}} scripts/vendor_upstream.py {{REF}}
-
-pull-arm64:
-    {{python_cmd}} scripts/pull_arm64.py
-
-pull-arm64-ref REF:
-    {{python_cmd}} scripts/pull_arm64.py {{REF}}
+# Pull (vendor) upstream code.
+#   just pull arm64          # latest arm64 code
+#   just pull arm64 <ref>    # specific git ref
+[script('sh')]
+pull target='arm64' *ARGS='':
+    set -euo pipefail
+    case "{{target}}" in
+      arm64)
+        {{python_cmd}} scripts/pull_arm64.py {{ARGS}}
+        ;;
+      *)
+        echo "unknown pull target: {{target}}" >&2
+        echo "usage: just pull [arm64]" >&2
+        exit 1
+        ;;
+    esac
 
 versions:
     @echo "=== Upstream asterinas ==="
     @cat .vendored-upstream 2>/dev/null || echo "  (not vendored yet — run 'just vendor')"
     @echo ""
     @echo "=== ARM64 source ==="
-    @cat .vendored-arm64 2>/dev/null || echo "  (not pulled yet — run 'just pull-arm64')"
+    @cat .vendored-arm64 2>/dev/null || echo "  (not pulled yet — run 'just pull arm64')"
 
 # ── SSH Keys (aarch64) ──────────────────────────────────────
 #
@@ -119,12 +138,35 @@ ssh-info:
     @echo ""
 
 # ── Build ──────────────────────────────────────────────────
+#
+# Build verbs follow a two-level convention:  just build <object> [args]
+#   just build                    # default board (NanoPi R3S)
+#   just build board <BOARD>      # specific board
+#   just build kernel <ARCH>      # kei kernel only (aarch64|x86_64|riscv64)
+#   just build browser <ARCH>     # aris-render browser engine (musl cross)
+#   just build desktop <ARCH>     # full stack: kernel + browser + initramfs
 
-build:
+# Build dispatcher: just build <object> [args...]
+build WHAT="default" ARG1="":
+    @case "{{WHAT}}" in \
+        default)  just _build-default ;; \
+        board)    just _build-board "{{ARG1}}" ;; \
+        kernel)   just build-arch "{{ARG1}}" ;; \
+        browser)  just _build-browser "{{ARG1}}" ;; \
+        desktop)  just _build-desktop "{{ARG1}}" ;; \
+        *) echo "Usage: just build [board|kernel|browser|desktop] [arg]"; \
+           echo "  just build              # default board (NanoPi R3S)"; \
+           echo "  just build board <name> # specific board"; \
+           echo "  just build kernel <arch>  # aarch64|x86_64|riscv64"; \
+           echo "  just build browser <arch> # aris-render musl binary"; \
+           echo "  just build desktop <arch> # full stack"; exit 1 ;; \
+    esac
+
+_build-default:
     just cache-guard
     {{python_cmd}} scripts/build.py nanopi-r3s
 
-build-board BOARD:
+_build-board BOARD:
     just cache-guard
     {{python_cmd}} scripts/build.py {{BOARD}}
 
@@ -143,6 +185,56 @@ dev ARCH="":
 [script('bash')]
 render ARCH="aarch64":
     RENDER_UI=1 just _run-aarch64 0
+
+# ── aris cross-compilation (browser engine) ─────────────────
+#
+# Internal recipes invoked by `just build browser` / `just build desktop`.
+# aris must be checked out at $ARIS_REPO (see .env / .env.example).
+# The build runs inside WSL because Windows has no musl cross-toolchain;
+# aris's .cargo/config.toml uses rust-lld self-contained linking.
+
+# Compile the aris-render browser engine (kei_desktop) for the target arch.
+# Invoked via: just build browser <ARCH>
+[script('bash')]
+_build-browser ARCH="aarch64":
+    set -e
+    ARCH="{{ARCH}}"
+    ARIS="{{ARIS_REPO}}"
+    case "$ARCH" in
+        aarch64) TRIPLE="aarch64-unknown-linux-musl" ;;
+        riscv64) TRIPLE="riscv64gc-unknown-linux-musl" ;;
+        x86_64)  TRIPLE="x86_64-unknown-linux-musl" ;;
+        *) echo "Unsupported arch: $ARCH (aarch64|riscv64|x86_64)"; exit 1 ;;
+    esac
+
+    # Resolve ARIS to an absolute path, then convert to a WSL /mnt/... path
+    # so cargo inside Ubuntu-24.04 can find the source tree.
+    ARIS_ABS=$(cd "$ARIS" 2>/dev/null && pwd || echo "$ARIS")
+    echo "[build browser] ARIS_REPO=$ARIS_ABS  triple=$TRIPLE"
+
+    # Windows path → WSL path (D:\foo\bar → /mnt/d/foo/bar)
+    WSL_ARIS=$(echo "$ARIS_ABS" | sed 's|\\|/|g' | sed -E 's|^([A-Za-z]):|/mnt/\L\1|')
+
+    wsl -d Ubuntu-24.04 -- bash -lc \
+        'cd "$1" && source ~/.cargo/env 2>/dev/null && RUSTUP_TOOLCHAIN=nightly-2026-05-01 cargo build --release --target "$2" -p aris-render --no-default-features --features "render fbdev" --bin kei_desktop' \
+        bash "$WSL_ARIS" "$TRIPLE" 2>&1 | tail -15
+
+    echo "[build browser] done: $ARIS_ABS/target/$TRIPLE/release/kei_desktop"
+
+# Full desktop stack: kernel + browser + initramfs.
+# Invoked via: just build desktop <ARCH>
+[script('bash')]
+_build-desktop ARCH="aarch64":
+    set -e
+    ARCH="{{ARCH}}"
+    echo "═══════ build desktop: $ARCH ═══════"
+    echo "[1/3] Building kei kernel..."
+    just build-arch "$ARCH"
+    echo "[2/3] Building aris-render browser..."
+    just _build-browser "$ARCH"
+    echo "[3/3] Packaging initramfs..."
+    ARIS_REPO="{{ARIS_REPO}}" {{python_cmd}} scripts/build_desktop_initramfs.py "$ARCH"
+    echo "═══════ done: just render $ARCH ═══════"
 
 # Build only (no QEMU launch).
 dev-build ARCH="":
@@ -527,7 +619,7 @@ test BOARD="nanopi-r3s":
     {{python_cmd}} scripts/test.py {{BOARD}}
 
 test-bsp:
-    cd bsp && cargo test
+    cargo test -p bsp-rk3566 -p bsp-bcm2711 -p bsp-jh7110
 
 # ── Utilities ──────────────────────────────────────────────
 

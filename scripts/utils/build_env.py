@@ -23,8 +23,11 @@ from celestia_devtools.env import wsl_exec as _wsl_exec
 from celestia_devtools.env import wsl_select as _wsl_select
 
 # ── Project-specific passthrough env ─────────────────────────────────────────
+# These env vars are propagated Windows → WSL during re-exec. ARIS_REPO tells
+# the initramfs build scripts where to find the aris rendering engine repo.
 PASSTHROUGH_ENV = {
     "ARCH_BUSYBOX",
+    "ARIS_REPO",
 }
 
 

@@ -5,8 +5,14 @@ edition.workspace = true
 description = "Rockchip RK3566 Board Support Package for Asterinas/kei"
 license.workspace = true
 
+# Status (2026-07-14): partial — driver source present (gpio/i2c/spi/uart) but the
+# crate is not yet linkable into the kei kernel.
+#
+# To finish the integration, the path dep below must be uncommented and adjusted to
+# point at the workspace `ostd` crate. Use the line marked [ENABLE BELOW] once the
+# patched-ostd → upstream-ostd merge stabilises (see docs/en/guides/upstream-sync.md).
+#
+# Until then, drivers are built standalone (e.g. `cargo check -p bsp-rk3566` works
+# in isolation because the source files don't yet use any ostd symbols).
 [dependencies]
-# Will depend on ostd when built inside the kernel workspace
-# ostd = { path = "../../vendor/asterinas/ostd" }
-
-# Placeholder until integration with patched ostd
+# [ENABLE BELOW] ostd = { path = "../../ostd", default-features = false }

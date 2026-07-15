@@ -7,12 +7,18 @@ Produces a newc-format cpio.gz with:
   /bin/busybox — minimal shell + utilities
   /dev/console, /dev/null, /dev/tty, /dev/zero, /dev/urandom — device nodes
 
-Usage: python3 build_render_initramfs.py [binary_name]
+The aris repository location is resolved from (in priority order):
+  1. The ARIS_REPO environment variable (set in .env, auto-loaded by just)
+  2. A sibling ``aris`` directory next to kei (legacy default)
+
+Usage: python3 build_render_initramfs.py [binary_name] [--build]
   binary_name defaults to 'kei_ui' (use 'kei_fbtest' for the test pattern)
+  --build compiles the aris binary before packaging
 
 The script reuses the cpio builder from tests/initramfs/build_aarch64_cpio.py.
 """
 import os
+import re
 import sys
 import gzip
 import shutil
@@ -20,11 +26,15 @@ import tempfile
 import subprocess
 
 KEI = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ARIS = os.path.join(os.path.dirname(KEI), "aris")
+# Resolve the aris repo path: ARIS_REPO env var takes priority, then sibling fallback.
+ARIS = os.environ.get("ARIS_REPO") or os.path.join(os.path.dirname(KEI), "aris")
 BUILD_DIR = os.path.join(KEI, "tests", "initramfs", "build")
 BUSYBOX = os.path.join(KEI, "tests", "initramfs", "busybox-aarch64")
 sys.path.insert(0, os.path.join(KEI, "tests", "initramfs"))
 from build_aarch64_cpio import build  # noqa: E402
+
+# The musl target triple for aarch64 cross-compilation.
+TARGET_TRIPLE = "aarch64-unknown-linux-musl"
 
 INIT_TEMPLATE = """#!/bin/sh
 mount -t proc none /proc 2>/dev/null
@@ -44,15 +54,65 @@ while true; do sleep 10; done
 DIRECT_INIT = True
 
 
+def _build_aris_binary(bin_name: str) -> str:
+    """Cross-compile the aris-render binary for aarch64 musl.
+
+    Runs ``cargo build --release --target aarch64-unknown-linux-musl --bin <name>``
+    inside the aris repo (at ARIS). On Windows this re-execs through WSL.
+    """
+    print(f"[build-aris] compiling {bin_name} for {TARGET_TRIPLE} in {ARIS}")
+    if not os.path.isdir(ARIS):
+        print(f"[err] aris repo not found at {ARIS}")
+        print("      Set ARIS_REPO in .env (see .env.example).")
+        sys.exit(1)
+
+    is_windows = sys.platform == "win32"
+    if is_windows:
+        aris_wsl = ARIS.replace("\\", "/")
+        aris_wsl = re.sub(r"^([A-Za-z]):", lambda m: f"/mnt/{m.group(1).lower()}", aris_wsl)
+        cmd = [
+            "wsl", "-d", "Ubuntu-24.04", "--", "bash", "-lc",
+            f'cd "{aris_wsl}" && source ~/.cargo/env 2>/dev/null && '
+            f'cargo build --release --target {TARGET_TRIPLE} --bin {bin_name}'
+        ]
+    else:
+        cmd = [
+            "cargo", "build", "--release",
+            "--target", TARGET_TRIPLE, "--bin", bin_name,
+        ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
+                            cwd=ARIS if not is_windows else None)
+    if result.returncode != 0:
+        print(f"[build-aris] FAILED (exit {result.returncode})")
+        print(result.stdout[-2000:] if result.stdout else "")
+        print(result.stderr[-2000:] if result.stderr else "")
+        sys.exit(1)
+
+    bin_path = os.path.join(ARIS, "target", TARGET_TRIPLE, "release", bin_name)
+    if not os.path.exists(bin_path):
+        print(f"[err] binary not found after build: {bin_path}")
+        sys.exit(1)
+    print(f"[build-aris] OK: {bin_path} ({os.path.getsize(bin_path)} bytes)")
+    return bin_path
+
+
 def main():
-    bin_name = sys.argv[1] if len(sys.argv) > 1 else "kei_ui"
-    bin_path = os.path.join(
-        ARIS, "target", "aarch64-unknown-linux-musl", "release", bin_name
-    )
+    args = sys.argv[1:]
+    do_build = "--build" in args
+    args = [a for a in args if a != "--build"]
+    bin_name = args[0] if args else "kei_ui"
+
+    bin_path = os.path.join(ARIS, "target", TARGET_TRIPLE, "release", bin_name)
+
+    # Compile aris if --build was requested or binary is missing.
+    if do_build or not os.path.exists(bin_path):
+        bin_path = _build_aris_binary(bin_name)
+
     if not os.path.exists(bin_path):
         print(f"[err] binary not found: {bin_path}")
         print("      build it first: cd aris && cargo build --release "
-              "--target aarch64-unknown-linux-musl --bin " + bin_name)
+              f"--target {TARGET_TRIPLE} --bin {bin_name}")
         sys.exit(1)
 
     print(f"[initramfs] binary: {bin_path} ({os.path.getsize(bin_path)} bytes)")

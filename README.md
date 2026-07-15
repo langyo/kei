@@ -1,8 +1,8 @@
-<p align="center"><img src="./docs/logo.webp" alt="KEI" width="240" /></p>
+<p align="center"><img src="https://raw.githubusercontent.com/celestia-island/docs.celestia.world/dev/res/logo/kei.webp" alt="KEI" width="240" /></p>
 
 <h1 align="center">KEI</h1>
 
-<p align="center"><strong>Rust OS kernel for industrial IoT gateways — derived from Asterinas (星绽), with an embedded no_std library for sensor nodes.</strong></p>
+<p align="center"><strong>A Rust OS kernel for industrial IoT edge devices.</strong></p>
 
 <div align="center">
 
@@ -31,7 +31,7 @@
 KEI is a Rust OS kernel for ARM64 and RISC-V edge devices. It also ships a
 `#![no_std]` library for embassy sensor nodes.
 
-KEI is derived from [Asterinas (星绽)](https://github.com/asterinas/asterinas),
+KEI is derived from [Asterinas](https://github.com/asterinas/asterinas),
 a Rust framekernel. It adds ARM64 board support, virtio-gpu display, industrial
 drivers, and a sensor-node wire protocol — while staying independent of upstream
 release cycles.
@@ -75,9 +75,31 @@ cargo run --example host_demo  # Wire protocol demo
 See the [library guide](./docs/en/guides/kei-library.md) and
 [benchmark results](./docs/en/guides/wire-protocol-benchmarks.md) for details.
 
-## Ecosystem
+## Desktop rendering (aris)
 
-- **[aris](https://github.com/celestia-island/aris)** — servo-derived browser engine
+The aris-render desktop (Blitz HTML/CSS layout + Vello CPU rasterization →
+`/dev/fb0`) requires the [aris](https://github.com/celestia-island/aris)
+repository. Point kei at your aris checkout via the `ARIS_REPO` environment
+variable:
+
+```bash
+cp .env.example .env
+# Edit .env and set ARIS_REPO to your aris repo path, e.g.:
+#   ARIS_REPO=../aris        (sibling directory — the default)
+#   ARIS_REPO=/home/me/aris  (absolute POSIX path)
+#   ARIS_REPO=D:\source\aris (absolute Windows path)
+```
+
+Build commands follow a two-level convention (`just build <object>`):
+
+```bash
+just build browser aarch64   # compile aris browser engine only (musl cross)
+just build desktop aarch64   # full stack: kernel + browser + initramfs
+just render aarch64          # launch QEMU with aris-rendered desktop
+```
+
+The justfile auto-loads `.env` (via `set dotenv-load`). If `ARIS_REPO` is
+unset, it falls back to `../aris` (sibling directory layout).
 
 ## License
 

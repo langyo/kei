@@ -2,6 +2,8 @@
 
 //! Virtio over MMIO
 
+#![allow(unsafe_code)]
+
 use core::ops::Range;
 
 use bus::MmioBus;
@@ -52,32 +54,56 @@ where
     F: FnOnce(IrqLine) -> ostd::Result<arch::MappedIrqLine>,
 {
     let start_addr = mmio_range.start;
-    ostd::early_println!("[virtio-mmio] try_register: acquiring IoMem {:#x}..{:#x}", start_addr, mmio_range.end);
-    let Ok(io_mem) = IoMem::acquire(mmio_range) else {
-        ostd::early_println!("[virtio-mmio] IoMem::acquire FAILED at {:#x}", start_addr);
-        return Err(MmioRegisterError::MmioUnavailable);
-    };
-    ostd::early_println!("[virtio-mmio] IoMem acquired OK, checking magic...");
 
-    // The kernel page table is now activated (commit dfd7324), so IoMem reads
-    // work correctly on aarch64. No more debug skips.
-    let magic_ok = mmio_check_magic(&io_mem);
-
-    if !magic_ok {
-        ostd::early_println!("[virtio-mmio] magic mismatch at {:#x}", start_addr);
-        return Err(MmioRegisterError::MagicMismatch);
-    }
-    ostd::early_println!("[virtio-mmio] magic OK, reading device ID...");
-
-    match mmio_read_device_id(&io_mem) {
-        Err(_) | Ok(0) => {
-            ostd::early_println!("[virtio-mmio] no device at {:#x}", start_addr);
+    // On aarch64 QEMU TCG, IoMem's VMALLOC mapping fails to read device_id
+    // (returns 0) even though the magic read works. The raw GPU probe uses
+    // the linear mapping (LINEAR_BASE + PA) successfully. We use the same
+    // linear-mapping approach here for the initial device check, then create
+    // IoMem with Writeback cache for subsequent device operations.
+    #[cfg(target_arch = "aarch64")]
+    {
+        const LINEAR_BASE: usize = 0xffff_8000_0000_0000;
+        let va = LINEAR_BASE + start_addr;
+        let magic = unsafe { core::ptr::read_volatile(va as *const u32) };
+        if magic != 0x74726976 {
+            return Err(MmioRegisterError::MagicMismatch);
+        }
+        let device_id = unsafe { core::ptr::read_volatile((va + 8) as *const u32) };
+        if device_id == 0 {
             return Err(MmioRegisterError::NoDevice);
         }
-        Ok(id) => {
-            ostd::early_println!("[virtio-mmio] device ID = {} at {:#x}", id, start_addr);
+        ostd::early_println!("[virtio-mmio] device ID = {} at {:#x} (linear mapping)", device_id, start_addr);
+    }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        let Ok(io_mem) = IoMem::acquire(mmio_range) else {
+            return Err(MmioRegisterError::MmioUnavailable);
+        };
+        if !mmio_check_magic(&io_mem) {
+            return Err(MmioRegisterError::MagicMismatch);
+        }
+        match mmio_read_device_id(&io_mem) {
+            Err(_) | Ok(0) => return Err(MmioRegisterError::NoDevice),
+            Ok(id) => {
+                ostd::early_println!("[virtio-mmio] device ID = {} at {:#x}", id, start_addr);
+            }
         }
     }
+
+    // Create IoMem for device operations. On aarch64 use Writeback to match
+    // the linear mapping cache attributes (works on QEMU TCG).
+    #[cfg(target_arch = "aarch64")]
+    let io_mem = {
+        use ostd::mm::CachePolicy;
+        IoMem::acquire_with_cache_policy(mmio_range, CachePolicy::Writeback)
+            .map_err(|_| MmioRegisterError::MmioUnavailable)?
+    };
+    #[cfg(not(target_arch = "aarch64"))]
+    let io_mem = {
+        // Re-acquire for the device (the earlier one was in a different scope)
+        IoMem::acquire(mmio_range).map_err(|_| MmioRegisterError::MmioUnavailable)?
+    };
 
     ostd::early_println!("[virtio-mmio] allocating IRQ line...");
     let Ok(mapped_irq_line) = IrqLine::alloc().and_then(map_irq_line) else {

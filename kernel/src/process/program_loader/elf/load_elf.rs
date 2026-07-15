@@ -9,6 +9,7 @@ use align_ext::AlignExt;
 use super::{
     elf_file::{ElfHeaders, LoadablePhdr},
     relocate::RelocatedRange,
+    tls,
 };
 use crate::{
     fs::vfs::path::{FsPath, Path, PathResolver},
@@ -91,8 +92,20 @@ pub fn load_elf_to_vmar(
     let user_stack_top = vmar.process_vm().init_stack().user_stack_top();
 
     // Set up TLS: if the ELF has a PT_TLS segment, allocate a TLS block in the
-    // process's address space and compute the thread pointer (TPIDR_EL0 on aarch64).
-    let tls_pointer = setup_tls(vmar, &elf_headers);
+    // process's address space and compute the thread pointer value (TPIDR_EL0
+    // on aarch64, tp register on riscv64, %fs on x86_64). Uses the per-arch
+    // TlsLayout trait to initialise musl's struct pthread.
+    let load_bias = elf_mapped_info.full_range.load_bias();
+    let tls_pointer = {
+        #[cfg(target_arch = "aarch64")]
+        { tls::setup_tls::<tls::TlsLayoutAarch64>(vmar, &elf_headers, load_bias) }
+        #[cfg(target_arch = "riscv64")]
+        { tls::setup_tls::<tls::TlsLayoutRiscv64>(vmar, &elf_headers, load_bias) }
+        #[cfg(target_arch = "x86_64")]
+        { tls::setup_tls::<tls::TlsLayoutX8664>(vmar, &elf_headers, load_bias) }
+        #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64", target_arch = "x86_64")))]
+        { None }
+    };
 
     // On aarch64, apply ELF relocations at load time (like Linux binfmt_elf)
     // so the static binary doesn't need to process them itself (which requires
@@ -543,151 +556,6 @@ fn map_vdso_to_vmar(vmar: &Vmar) -> Option<Vaddr> {
     )
     .unwrap();
     Some(vdso_text_base)
-}
-
-/// Allocates a TLS block and returns the thread pointer (TPIDR_EL0 value).
-///
-/// On aarch64, TPIDR_EL0 must point to writable memory (past the TLS block).
-/// We allocate a zeroed page — musl's __init_tls will set up the actual TLS
-/// template. The critical thing is that TPIDR_EL0 is NOT zero, so early
-/// thread-local accesses don't dereference NULL.
-fn setup_tls(vmar: &Vmar, elf_headers: &ElfHeaders) -> Option<Vaddr> {
-    use crate::vm::perms::VmPerms;
-
-    // Determine the TLS block size from PT_TLS. Even if there is no PT_TLS
-    // (or it's empty), we still allocate a TLS block with a struct pthread
-    // (TCB) and set TPIDR_EL0 — musl reads TPIDR_EL0 very early (in
-    // __libc_start_main) for __pthread_self(), and TPIDR_EL0=0 causes
-    // immediate faults.
-    let (tls_memsz, tls_filesz, tls_align, tls_phdr_vaddr) = match elf_headers.tls_phdr() {
-        Some(phdr) if phdr.memsz > 0 => (phdr.memsz, phdr.filesz, phdr.align.max(16), phdr.vaddr),
-        _ => (0, 0, 16, 0), // no PT_TLS: still set up a pthread/TCB
-    };
-
-    // On aarch64, set up a TLS block matching musl's TLS_ABOVE_TP layout
-    // used by the statically-linked musl busybox/dropbear binaries.
-    //
-    // musl TLS_ABOVE_TP layout (arch/aarch64/pthread_arch.h):
-    //   [TLS data (.tdata/.tbss)] [gap=16] [struct pthread (0xc8 B)] [TPIDR_EL0 →]
-    //   __pthread_self() = TPIDR_EL0 - sizeof(struct pthread) = TP - 0xc8
-    //   struct pthread field offsets:
-    //     0x00 self, 0x08 prev, 0x10 next, 0x18 sysinfo,
-    //     0x20 tid, 0x24 errno_val, ...
-    //     0x98 locale (locale_t = struct __locale_struct *)
-    //   errno is at __pthread_self()->errno_val = (TP - 0xc8) + 0x24 = TP - 0xa4
-    //
-    // musl reads TPIDR_EL0 very early in __libc_start_main, so the kernel must
-    // provide a valid struct pthread with self/dtv pointers.
-    #[cfg(target_arch = "aarch64")]
-    {
-        use crate::vm::perms::VmPerms;
-
-        // musl struct pthread on aarch64 is 0xc8 bytes.
-        let pthread_size = 0xc8usize;
-        let gap = 16usize; // GAP_ABOVE_TP
-        let dtv_size = 24usize;
-
-        let tls_data_aligned = (tls_memsz + tls_align - 1) & !(tls_align - 1);
-        // Layout: [TLS data] [gap] [struct pthread] [TP]
-        let total = (tls_data_aligned + gap + pthread_size + dtv_size + 4095) & !4095;
-
-        let tls_base = vmar
-            .new_map(total, VmPerms::READ | VmPerms::WRITE)
-            .ok()?
-            .handle_page_faults_around()
-            .build()
-            .ok()?;
-
-        // struct pthread starts after the TLS data + gap.
-        let td_addr = tls_base + tls_data_aligned + gap;
-        let dtv_addr = td_addr + pthread_size;
-        // TPIDR_EL0 points right after struct pthread.
-        let tp = dtv_addr;
-
-        // --- struct pthread (at td_addr) ---
-        // self(0x0) = td_addr: so __pthread_self()->self == __pthread_self()
-        let self_bytes = (td_addr as u64).to_le_bytes();
-        let mut r = ostd::mm::VmReader::from(&self_bytes[..]).to_fallible();
-        let _ = vmar.write_alien(td_addr, &mut r);
-
-        // dtv(0x8) field — musl stores dtv at offset 0xc0 (tail of struct
-        // pthread in TLS_ABOVE_TP). Point it at the dtv array.
-        let dtv_ptr = (dtv_addr as u64).to_le_bytes();
-        let mut r = ostd::mm::VmReader::from(&dtv_ptr[..]).to_fallible();
-        let _ = vmar.write_alien(td_addr + 0xc0, &mut r);
-
-        // canary(0xb8) — musl stores canary at offset 0xb8. Leave zeroed.
-
-        // locale(0x98) = pointer to a zeroed __locale_struct (C locale).
-        // musl's locale functions read __pthread_self()->locale. A zeroed
-        // __locale_struct means C locale (musl falls back to built-in data).
-        // The struct is zeroed already (within the pthread allocation).
-        let locale_struct_addr = td_addr + 0x40; // unused region inside pthread
-        let locale_ptr_bytes = (locale_struct_addr as u64).to_le_bytes();
-        let mut r = ostd::mm::VmReader::from(&locale_ptr_bytes[..]).to_fallible();
-        let _ = vmar.write_alien(td_addr + 0x98, &mut r);
-
-        // dtv array: dtv[0] = 1 (tls_cnt), dtv[1] = tls_base
-        let one_bytes = 1u64.to_le_bytes();
-        let mut r = ostd::mm::VmReader::from(&one_bytes[..]).to_fallible();
-        let _ = vmar.write_alien(dtv_addr, &mut r);
-
-        let base_bytes = (tls_base as u64).to_le_bytes();
-        let mut r = ostd::mm::VmReader::from(&base_bytes[..]).to_fallible();
-        let _ = vmar.write_alien(dtv_addr + 8, &mut r);
-
-        // Copy .tdata from the LOAD segment to the TLS data area.
-        if tls_filesz > 0 {
-            let mut buf = vec![0u8; tls_filesz];
-            let src_reader = vmar
-                .read_alien(
-                    tls_phdr_vaddr,
-                    &mut ostd::mm::VmWriter::from(buf.as_mut_slice()).to_fallible(),
-                )
-                .ok();
-            ostd::early_println!(
-                "[tls] .tdata copy: phdr_vaddr={:#x} filesz={} src_ok={}",
-                tls_phdr_vaddr, tls_filesz, src_reader.is_some()
-            );
-            if src_reader.is_some() {
-                // Verify we actually read the .tdata (first 8 bytes)
-                let first8 = u64::from_le_bytes([
-                    buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7],
-                ]);
-                ostd::early_println!("[tls] .tdata first8 bytes = {:#x}", first8);
-                let mut r = ostd::mm::VmReader::from(buf.as_slice()).to_fallible();
-                let _ = vmar.write_alien(tls_base, &mut r);
-                // Read back to verify write
-                let mut readback = [0u8; 8];
-                let mut rb_reader = ostd::mm::VmWriter::from(readback.as_mut_slice()).to_fallible();
-                let _ = vmar.read_alien(tls_base, &mut rb_reader);
-                let rb_val = u64::from_le_bytes(readback);
-                ostd::early_println!("[tls] .tdata readback = {:#x} (match={})", rb_val, rb_val == first8);
-            }
-        }
-
-        ostd::early_println!(
-            "[tls] musl: base={:#x} td={:#x} tp={:#x} dtv={:#x} psz={:#x}",
-            tls_base, td_addr, tp, dtv_addr, pthread_size
-        );
-        return Some(tp);
-    }
-
-    // On other architectures, allocate a separate TLS block.
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        let _ = vmar; // suppress unused warning
-        let alloc_pages = 2usize;
-        let alloc_size = alloc_pages * PAGE_SIZE;
-        let tls_base = vmar
-            .new_map(alloc_size, VmPerms::READ | VmPerms::WRITE)
-            .ok()?
-            .handle_page_faults_around()
-            .build()
-            .ok()?;
-        let tp = tls_base + PAGE_SIZE;
-        Some(tp)
-    }
 }
 
 /// Applies ELF relocations at load time (aarch64 only).

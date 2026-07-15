@@ -176,6 +176,10 @@ impl FileOps for TdxGuestFile {
 }
 
 impl PerOpenFileOps for TdxGuestFile {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn check_seekable(&self) -> Result<()> {
         return_errno_with_message!(Errno::ESPIPE, "seek is not supported")
     }
