@@ -49,8 +49,8 @@ impl<D: TtyDriver> FileOps for TtyFile<D> {
 
 #[inherit_methods(from = "self.0")]
 impl<D: TtyDriver> PerOpenFileOps for TtyFile<D> {
-    fn direct_write(&self, reader: &mut VmReader, status_flags: StatusFlags) -> Result<usize> {
-        self.0.write(reader, status_flags)
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn ioctl(&self, raw_ioctl: RawIoctl) -> Result<i32>;

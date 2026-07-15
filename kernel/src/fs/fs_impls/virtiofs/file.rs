@@ -137,6 +137,10 @@ impl FileOps for VirtioFsFile {
 }
 
 impl PerOpenFileOps for VirtioFsFile {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn check_seekable(&self) -> Result<()> {
         if self
             .open_handle

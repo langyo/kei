@@ -67,6 +67,10 @@ impl FileOps for VirtioFsDir {
 }
 
 impl PerOpenFileOps for VirtioFsDir {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn check_seekable(&self) -> Result<()> {
         if self
             .open_handle

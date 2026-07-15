@@ -1,6 +1,21 @@
 # kei — 项目状态与计划 (PLAN)
 
-> 本文件于 **2026-07-14** 更新，记录项目当前状态、近期进展与后续计划。
+> 本文件于 **2026-07-15** 更新，记录项目当前状态、近期进展与后续计划。
+
+## Refresh log 2026-07-15
+
+- **当前分支**：`dev` · 领先 `origin/dev` 0 commits · 工作区有 19 项改动（vtable 修复 + IoMem 修复）
+- **最近提交**：`🔧 Gateway mode: aris vtty + WS JSON-RPC server.` (`0f42289`)
+- **未提交改动**：
+  - **`PerOpenFileOps` vtable 修复**（19 个 implementor + `inode_handle.rs`）
+  - **`IoMem::base()` 算术溢出修复**（`packages/ostd/src/io/io_mem/mod.rs`：`+` 改 `wrapping_add`）
+  - `packages/bsp/jh7110/src/lib.rs` 调整（kei-echo agent 并行改动）
+- **已验证**：aarch64 QEMU 启动后通过 `SYS_OPENAT`/`SYS_SOCKET`/`SYS_BIND`/`SYS_LISTEN`/`SYS_WRITEV` 等 syscalls，dropbear 成功 listen 22 端口。无 OOPS。
+- **后续动作**：
+  1. ~~验证网关模式~~ ✅ aarch64 启动链路通；SSH banner 需修复 dropbear host key
+  2. 验证移除 `KEI_NO_DOM=1` 后 Blitz DOM 仍可运行（已修复 vtable）
+  3. 跨仓 `[patch]` 收敛到 `~/.cargo/config.toml`（aster 派生链共用）。
+- **跨仓依赖**：vtty 协议与 `kou` 对接；浏览器 UI 复用 `aris`；内核 fork 自 aster（见顶层 `patches/` 长期方案）。
 
 ## Refresh log 2026-07-14
 

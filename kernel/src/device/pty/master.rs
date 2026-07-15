@@ -139,6 +139,10 @@ impl FileOps for PtyMaster {
 }
 
 impl PerOpenFileOps for PtyMaster {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn check_seekable(&self) -> Result<()> {
         return_errno_with_message!(Errno::ESPIPE, "the inode is a pty");
     }

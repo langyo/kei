@@ -137,6 +137,10 @@ impl FileOps for PipeHandle {
 }
 
 impl PerOpenFileOps for PipeHandle {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn check_seekable(&self) -> Result<()> {
         return_errno_with_message!(Errno::ESPIPE, "the inode is a FIFO file")
     }

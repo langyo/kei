@@ -576,6 +576,10 @@ impl FileOps for FbHandle {
 }
 
 impl PerOpenFileOps for FbHandle {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn check_seekable(&self) -> Result<()> {
         Ok(())
     }

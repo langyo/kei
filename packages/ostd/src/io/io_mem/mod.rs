@@ -191,8 +191,15 @@ impl<SecuritySensitivity> IoMem<SecuritySensitivity> {
     }
 
     /// Returns the base virtual address of the MMIO range.
+    ///
+    /// On aarch64, [`Self::new`] sets `offset` such that the linear-mapping
+    /// VA is recovered: `linear_va = kva.start().wrapping_add(offset)`. The
+    /// `wrapping_*` arithmetic is intentional because both `kva.start()` and
+    /// the recovered VA live in the high kernel half and a naive `+` would
+    /// overflow. Callers receive this VA and pass user-supplied offsets to
+    /// `read_once`/`write_once`, which combine everything in `usize`.
     fn base(&self) -> usize {
-        self.kvirt_area.deref().start() + self.offset
+        self.kvirt_area.deref().start().wrapping_add(self.offset)
     }
 
     /// Validates that the offset range lies within the MMIO window.
@@ -220,7 +227,7 @@ impl IoMem<Sensitive> {
     /// effects (e.g., corrupting the kernel memory).
     pub(crate) unsafe fn read_once<T: PodOnce>(&self, offset: usize) -> T {
         debug_assert!(offset + size_of::<T>() <= self.limit);
-        let ptr = (self.kvirt_area.deref().start() + self.offset + offset) as *const T;
+        let ptr = (self.kvirt_area.deref().start().wrapping_add(self.offset) + offset) as *const T;
         // SAFETY: The safety of the read operation's semantics is upheld by the caller.
         unsafe { read_once(ptr) }
     }
@@ -239,7 +246,7 @@ impl IoMem<Sensitive> {
     /// effects (e.g., corrupting the kernel memory).
     pub(crate) unsafe fn write_once<T: PodOnce>(&self, offset: usize, value: &T) {
         debug_assert!(offset + size_of::<T>() <= self.limit);
-        let ptr = (self.kvirt_area.deref().start() + self.offset + offset) as *mut T;
+        let ptr = (self.kvirt_area.deref().start().wrapping_add(self.offset) + offset) as *mut T;
         // SAFETY: The safety of the write operation's semantics is upheld by the caller.
         unsafe { write_once(ptr, *value) };
     }
