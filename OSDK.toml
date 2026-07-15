@@ -115,7 +115,7 @@ qemu.args = """\
     -device virtio-keyboard-device \
     -device virtio-serial-device \
     -device virtconsole,chardev=mux \
-    -netdev user,id=net0,hostfwd=tcp::2222-:22 \
+    -netdev user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::8423-:8423,hostfwd=tcp::3000-:3000 \
     -device virtio-net-device,netdev=net0 \
     ${QEMU_DISPLAY:--display sdl} \
 """

@@ -1,0 +1,53 @@
+[package]
+name = "kei-webui"
+version = "0.1.0"
+edition = "2024"
+description = "kei OS webui — browser-based dashboard connecting to kei WS JSON-RPC"
+publish = false
+authors = ["kei contributors"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+tairitsu-vdom = { path = "../../../tairitsu/packages/vdom" }
+tairitsu-hooks = { path = "../../../tairitsu/packages/hooks" }
+tairitsu-macros = { path = "../../../tairitsu/packages/macros" }
+tairitsu-web = { path = "../../../tairitsu/packages/web", features = [
+    "browser",
+    "vdom",
+    "wit-bindings",
+], default-features = false }
+
+hikari-palette = { path = "../../../hikari/packages/palette" }
+hikari-components = { path = "../../../hikari/packages/components" }
+hikari-icons = { path = "../../../hikari/packages/icons", features = ["tairitsu"] }
+
+anyhow = "1"
+
+[patch."https://github.com/celestia-island/hikari.git"]
+hikari-palette = { path = "../../../hikari/packages/palette" }
+hikari-components = { path = "../../../hikari/packages/components" }
+hikari-icons = { path = "../../../hikari/packages/icons" }
+
+[package.metadata.tairitsu]
+app-name = "kei webui"
+title = "kei OS — Dashboard"
+description = "Browser-based dashboard for kei OS, connecting via WebSocket JSON-RPC"
+
+[package.metadata.tairitsu.build]
+target = "component"
+output_dir = "../../target/kei-webui-dist"
+optimize = true
+sourcemap = true
+
+[package.metadata.tairitsu.dev]
+port = 3000
+hot-reload = true
+open-browser = false
+
+[package.metadata.tairitsu.html]
+lang = "en"
+charset = "UTF-8"
+viewport = "width=device-width, initial-scale=1.0"
+body_class = "hi-layout hi-layout-dark"

@@ -2,13 +2,27 @@
 
 > 本文件于 **2026-07-15** 更新，记录项目当前状态、近期进展与后续计划。
 
-## Refresh log 2026-07-15 #2 (dropbear host key 修复)
+## Refresh log 2026-07-15 #3 (webui 骨架 + QEMU 网络 + 三平台验证)
+
+- **新增 `packages/webui/`**：kei 浏览器端仪表盘，tairitsu + hikari 技术栈。
+  - `Cargo.toml`：独立 crate（非 kei workspace 成员），依赖 tairitsu-vdom/hooks/macros/web + hikari-palette/components/icons，target `wasm32-wasip2`。
+  - `src/lib.rs`：kei 状态仪表盘 — 系统信息卡片（kernel/arch/uptime/memory）、网络状态卡片（host/port/ws status）、终端日志查看器、页脚状态栏。
+  - 构建：需 `tairitsu-packager dev` 启动 dev server（port 3000），浏览器通过 `ws://localhost:8423/ws` 连接 kei WS JSON-RPC。
+- **QEMU 网络端口映射**：`OSDK.toml` aarch64 scheme 新增 `hostfwd=tcp::8423-:8423,hostfwd=tcp::3000-:3000`（webui WS + dev server）。
+- **三平台启动验证**：
+  - **aarch64**：✅ 完整启动 → initramfs 解包 → dropbear 监听 port 22 → `/dev/fb0` 注册 → virtio-gpu scanout 320×240。无 OOPS。
+  - **riscv64**：⚠️ ostd init 完成后 Components Bootstrap trap（已知，PLAN.md line 133 记载）。
+  - **x86_64**：⚠️ QEMU `-kernel` 无法加载 64-bit multiboot ELF（已知，PLAN.md line 134 记载）。需 GRUB ISO 或 PVH 格式。
+- **待办**：重建 initramfs（含 dropbear host key fix）→ 验证 SSH banner。
+
+## Refresh log 2026-07-15 #2 (dropbear host key 修复 + jh7110 + initramfs 路径修复)
 
 - **修复**：dropbear SSH host key 缺失（QEMU 2222 端口可连接但无 SSH banner）。
   - `tests/initramfs/build_aarch64_rootfs.sh`（line 30-43）：构建时通过 qemu-aarch64-static → dropbearkey → ssh-keygen 三级 fallback 生成 ed25519 host key。
   - `tests/initramfs/src/init_aarch64`（line 11-14）：启动时 fallback — 若 host key 不存在则用 `/sbin/dropbearkey` 生成。
-  - 顺便修复：`build_aarch64_rootfs.sh` 中 `test/initramfs/` → `tests/initramfs/` 路径 typo（之前脚本因路径错误无法找到 busybox/init）。
-- **未提交**：`packages/bsp/jh7110/src/lib.rs`（kei-echo agent 改动）仍在 working tree。
+  - 顺便修复：`build_aarch64_rootfs.sh` 中 `test/initramfs/` → `tests/initramfs/` 路径 typo。
+- **jh7110 skeleton guard**：`packages/bsp/jh7110/src/lib.rs` 的 `compile_error!` 替换为 `#[deprecated]` no-op `init()`。
+- **已提交**：commit `416b136`。
 
 ## Refresh log 2026-07-15 (vtable 修复 + 收尾清点)
 
@@ -19,10 +33,10 @@
   - **`IoMem::base()` 算术溢出**（同 commit `99e7d95`）：线性映射在 high kernel half 的 `kva.start() + self.offset` 在 aarch64 触发 `attempt to add with overflow`。`base()`/`read_once()`/`write_once()` 改用 `wrapping_add`，与 `IoMem::new` 中的 `wrapping_sub` 配对。
   - **QEMU 启动验证**：`SYS_OPENAT` / `SYS_SOCKET` / `SYS_BIND` / `SYS_LISTEN` / `SYS_WRITEV` 全部成功；dropbear listen 22 端口成功；**无 OOPS**。
 - **遗留疑问**：
-  1. **dropbear SSH banner 缺失**：QEMU 启动后 2222 端口可连接但 SSH 协议无 banner。`/etc/dropbear/dropbear_ed25519_host_key` 报 `ENOENT`，需在 `tests/initramfs/build/initramfs_aarch64.cpio.gz` 中预置 host key。**与 vtable 修复无关**，是 initramfs 构建脚本的预存 gap。
+  1. ~~**dropbear SSH banner 缺失**~~ ✅ 已修复（commit `416b136`）：build script + init script 两级 host key 生成。需重建 initramfs 后验证 SSH banner。
   2. **KEI_NO_DOM=1**：env var 由 `init_proc.rs` 推给用户空间 init 程序消费（用于 aris-render 跳过 DOM 创建）。本次修复的是**内核** vtable crash；用户空间 fontique/skrifa 的 vtable panic 仍未修（见 2026-07-15 早些时 kei-echo 的结论：fork 删除，转向修 kernel）。**保留** `KEI_NO_DOM=1` 不变。
   3. **`O_APPEND` + `open_file` 交互**：仍为预存 FIXME（`read()` / `write_at()` 中有标记），与本次 vtable 修复无关，且涉及并发语义，需独立设计。
-  4. **`packages/bsp/jh7110/src/lib.rs`**：kei-echo agent 并行修改（解除 skeleton `compile_error!`，改为 no-op init）。**未提交**，留待 kei-echo 提交。
+  4. **`packages/bsp/jh7110/src/lib.rs`**：kei-echo agent 的 `compile_error!` → `#[deprecated]` no-op `init()` 已提交（commit `416b136`）。
   5. **`packages/ostd/src/io/io_mem/mod.rs` 的"linear mapping workaround"** 是 aarch64 临时绕过方案（用 `wrapping_*` 算术恢复 linear_va），非通用正确实现。`FIXME: We currently do not limit the I/O memory allocator with the maximum GPA`（line 109）仍待修。
 - **后续动作**：
   1. ~~验证网关模式~~ ✅ aarch64 启动链路通
