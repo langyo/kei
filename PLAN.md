@@ -2,6 +2,15 @@
 
 > 本文件于 **2026-07-15** 更新，记录项目当前状态、近期进展与后续计划。
 
+## Refresh log 2026-07-15 #4 (riscv64 + x86_64 修复)
+
+- **riscv64 内核启动修复**：
+  - `kernel/src/init.rs`：添加 `ostd::early_println!()` 诊断标记（`ostd::info!()` 因 `core::unicode::conversions` div-by-zero bug 在 riscv64 上完全抑制）；`cmdline::init_no_component()` 覆盖 riscv64（与 aarch64 相同的 component system 绕过）；`bsp_idle_loop` / `first_kthread` 加 riscv64 early_println。
+  - `kernel/src/time/mod.rs`：riscv64 使用 `init_no_rtc()` 绕过（与 aarch64 相同），跳过 `system_time::init()` / `clocks::init()` / `softirq::init()` 全路径。根因：全路径启用 timer 中断回调，回调可能触发 `core::unicode::conversions` div-by-zero panic → kernel trap。
+- **x86_64 启动修复**：
+  - `OSDK.toml` microvm scheme 新增 `grub.boot_protocol = "linux"`，切换为 Linux bzImage 启动协议。`packages/ostd/libs/linux-bzimage/` 基础设施已完备（setup header + bzImage builder），QEMU `-kernel` 原生支持 bzImage 格式。
+  - 根因：原 multiboot2 ELF 为 64-bit，QEMU x86_64 `-kernel` 的 multiboot loader 仅接受 32-bit ELF（即使 `make_elf_for_qemu()` patch `e_machine` 也无效）。
+
 ## Refresh log 2026-07-15 #3 (webui 骨架 + QEMU 网络 + 三平台验证)
 
 - **新增 `packages/webui/`**：kei 浏览器端仪表盘，tairitsu + hikari 技术栈。
@@ -11,8 +20,8 @@
 - **QEMU 网络端口映射**：`OSDK.toml` aarch64 scheme 新增 `hostfwd=tcp::8423-:8423,hostfwd=tcp::3000-:3000`（webui WS + dev server）。
 - **三平台启动验证**：
   - **aarch64**：✅ 完整启动 → initramfs 解包 → dropbear 监听 port 22 → `/dev/fb0` 注册 → virtio-gpu scanout 320×240。无 OOPS。
-  - **riscv64**：⚠️ ostd init 完成后 Components Bootstrap trap（已知，PLAN.md line 133 记载）。
-  - **x86_64**：⚠️ QEMU `-kernel` 无法加载 64-bit multiboot ELF（已知，PLAN.md line 134 记载）。需 GRUB ISO 或 PVH 格式。
+  - **riscv64**：⚠️→🔧 已修复代码（`init_no_rtc()` 绕过 + `early_println!` 诊断），需重建验证。
+  - **x86_64**：⚠️→🔧 已修复代码（microvm 切换 `grub.boot_protocol = "linux"` → bzImage），需重建验证。
 - **待办**：重建 initramfs（含 dropbear host key fix）→ 验证 SSH banner。
 
 ## Refresh log 2026-07-15 #2 (dropbear host key 修复 + jh7110 + initramfs 路径修复)

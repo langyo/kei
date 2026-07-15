@@ -33,6 +33,7 @@ args = "$(./scripts/tools/qemu_args.sh test)"
 [scheme."microvm"]
 boot.method = "qemu-direct"
 build.strip_elf = true
+grub.boot_protocol = "linux"
 qemu.args = "$(./scripts/tools/qemu_args.sh microvm)"
 
 [scheme."iommu"]
