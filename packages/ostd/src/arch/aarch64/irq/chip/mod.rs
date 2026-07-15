@@ -421,8 +421,46 @@ pub(crate) unsafe fn init_on_ap() {
 
     gicv3::GicCpuInterface::set_priority_mask(0xf0);
 
-    // FIXME: Wake this AP's redistributor, configure GICR_SGI registers,
-    // then call enable_group1 last (matching init_on_bsp order).
+    // Wake this AP's redistributor and configure SGI/PPI registers.
+    let (_, gicr_base) = GIC_BASES.get().expect("GIC bases not initialized");
+
+    // Read MPIDR_EL1 to determine which redistributor belongs to this CPU.
+    // For QEMU virt, MPIDR Aff0 gives the sequential CPU index
+    // and GICR_STRIDE is 0x20000 (128 KiB).
+    let mpidr: u64;
+    unsafe { core::arch::asm!("mrs {0}, mpidr_el1", out(reg) mpidr, options(nomem, nostack)) };
+    let cpu_idx = (mpidr & 0xff) as usize; // MPIDR Aff0
+
+    let stride = 0x20000usize; // GICR_STRIDE (QEMU virt default)
+    let this_gicr = (gicr_base as usize + cpu_idx * stride) as usize;
+    let this_gicr_va = paddr_to_vaddr(this_gicr);
+
+    unsafe {
+        // GICR_WAKER (offset 0x0014): clear ProcessorSleep (bit 1), then
+        // poll until ChildrenAsleep (bit 2) clears.
+        let waker_addr = (this_gicr_va + 0x0014) as *mut u32;
+        core::ptr::write_volatile(waker_addr, core::ptr::read_volatile(waker_addr) & !2u32);
+        while core::ptr::read_volatile(waker_addr as *const u32) & 4 != 0 {}
+
+        let gicr_sgi_va = this_gicr_va + 0x10000;
+
+        // GICR_ICENABLER0 (SGI base + 0x180): disable all SGIs/PPIs.
+        core::ptr::write_volatile((gicr_sgi_va + 0x180) as *mut u32, !0u32);
+
+        // GICR_ICACTIVER0 (SGI base + 0x380): deactivate all SGIs/PPIs.
+        core::ptr::write_volatile((gicr_sgi_va + 0x380) as *mut u32, !0u32);
+
+        // GICR_IGROUPR0 (SGI base + 0x80): assign all SGIs/PPIs to Group-1.
+        core::ptr::write_volatile((gicr_sgi_va + 0x80) as *mut u32, !0u32);
+
+        // GICR_IPRIORITYR0 (SGI base + 0x400): set priority for all SGIs/PPIs.
+        for i in (0..32usize).step_by(4) {
+            core::ptr::write_volatile((gicr_sgi_va + 0x400 + i) as *mut u32, 0xa8a8a8a8u32);
+        }
+
+        // GICR_ISENABLER0 (SGI base + 0x100): enable PPI 30 (CNTPIRQ / physical timer).
+        core::ptr::write_volatile((gicr_sgi_va + 0x100) as *mut u32, 1u32 << 30);
+    }
 
     // Enable Group 1 at CPU interface last.
     gicv3::GicCpuInterface::enable_group1(true);

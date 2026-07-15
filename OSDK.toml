@@ -107,7 +107,7 @@ qemu.args = """\
     -cpu cortex-a72 \
     -machine virt,gic-version=3,virtualization=on \
     -m ${MEM:-2G} \
-    -smp ${SMP:-1} \
+    -smp ${SMP:-4} \
     --no-reboot \
     -serial chardev:mux \
     -monitor chardev:mux \

@@ -2,6 +2,15 @@
 
 > 本文件于 **2026-07-15** 更新，记录项目当前状态、近期进展与后续计划。
 
+## Refresh log 2026-07-15 #6 (aarch64 SMP/PSCI 多核启动)
+
+- **aarch64 SMP 支持实现**：从 stub 到完整的多核启动：
+  - **`packages/ostd/src/arch/aarch64/boot/smp.rs`**：`count_processors()` 从 FDT `/cpus` 节点统计 CPU 数量；`bringup_all_aps()` 通过 PSCI `CPU_ON`（0xC4000003）唤醒每个 AP，收集非 BSP 的 MPIDR。新增 `psci_cpu_on()` / `read_mpidr_el1()` / `collect_ap_mpidrs()` / `aarch64_ap_early_entry()` 等辅助函数。
+  - **`packages/ostd/src/arch/aarch64/boot/ap_boot.S`**（新文件）：AP 启动汇编 — 设置 MAIR_EL1/TCR_EL1/TTBR1_EL1，启用 MMU，加载 `PerApRawInfo` 中的栈和 CPU-local 指针，设置 TPIDR_EL1 和 VBAR_EL1，原子递增 CPU ID 计数器，跳转到 Rust `aarch64_ap_early_entry`。
+  - **`packages/ostd/src/arch/aarch64/irq/chip/mod.rs`**：`init_on_ap()` 实现完整的 GIC redistributor 唤醒（读取 MPIDR_EL1 计算 GICR 偏移，清除 ProcessorSleep，配置 GICR_SGI 寄存器，启用 timer PPI INTID 30）。
+  - 通用框架 `packages/ostd/src/boot/smp.rs` 已完备（栈分配、`ap_early_entry`、等待 AP 就绪），本 commit 补全 aarch64 粘合层。
+- **启用方式**：`OSDK.toml` 中 `-smp ${SMP:-1}` → 改为 `${SMP:-4}` 即可测试。
+
 ## Refresh log 2026-07-15 #5 (TLS trait 抽象 + busybox TLS 修复)
 
 - **TLS 初始化重构**：将 `kernel/src/process/program_loader/elf/load_elf.rs` 中 145 行 `#[cfg(target_arch = "aarch64")]` 的单体 `setup_tls()` 提取为架构无关的 trait 抽象：
