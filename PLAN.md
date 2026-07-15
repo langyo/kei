@@ -2,19 +2,24 @@
 
 > 本文件于 **2026-07-15** 更新，记录项目当前状态、近期进展与后续计划。
 
-## Refresh log 2026-07-15
+## Refresh log 2026-07-15 (vtable 修复 + 收尾清点)
 
-- **当前分支**：`dev` · 领先 `origin/dev` 0 commits · 工作区有 19 项改动（vtable 修复 + IoMem 修复）
-- **最近提交**：`🔧 Gateway mode: aris vtty + WS JSON-RPC server.` (`0f42289`)
-- **未提交改动**：
-  - **`PerOpenFileOps` vtable 修复**（19 个 implementor + `inode_handle.rs`）
-  - **`IoMem::base()` 算术溢出修复**（`packages/ostd/src/io/io_mem/mod.rs`：`+` 改 `wrapping_add`）
-  - `packages/bsp/jh7110/src/lib.rs` 调整（kei-echo agent 并行改动）
-- **已验证**：aarch64 QEMU 启动后通过 `SYS_OPENAT`/`SYS_SOCKET`/`SYS_BIND`/`SYS_LISTEN`/`SYS_WRITEV` 等 syscalls，dropbear 成功 listen 22 端口。无 OOPS。
+- **当前分支**：`dev` · **领先 `origin/dev` 1 commit**（vtable 修复）· 工作区仅剩 kei-echo agent 的 `packages/bsp/jh7110/src/lib.rs`
+- **最近提交**：`🔧 Fix PerOpenFileOps vtable dispatch on aarch64.` (`99e7d95`)
+- **已修复并验证**：
+  - **`PerOpenFileOps` vtable dispatch**（commit `99e7d95`）：aarch64 nightly-2026-05-01 下 `&dyn PerOpenFileOps → &dyn FileOps / &dyn Any` 的 trait upcast vtable 错误导致 EL1 data abort。改为：(1) `FileOps::read_at/write_at/readdir_at` 直接通过 `&dyn PerOpenFileOps` vtable 调用（supertrait 继承）；(2) `as_any()` 改为 `PerOpenFileOps` 必选方法，每个 implementor 显式写 `self`（按具体类型生成 vtable 条目，无 trait upcast 参与）。19 个 implementor + `inode_handle.rs` 同步。
+  - **`IoMem::base()` 算术溢出**（同 commit `99e7d95`）：线性映射在 high kernel half 的 `kva.start() + self.offset` 在 aarch64 触发 `attempt to add with overflow`。`base()`/`read_once()`/`write_once()` 改用 `wrapping_add`，与 `IoMem::new` 中的 `wrapping_sub` 配对。
+  - **QEMU 启动验证**：`SYS_OPENAT` / `SYS_SOCKET` / `SYS_BIND` / `SYS_LISTEN` / `SYS_WRITEV` 全部成功；dropbear listen 22 端口成功；**无 OOPS**。
+- **遗留疑问**：
+  1. **dropbear SSH banner 缺失**：QEMU 启动后 2222 端口可连接但 SSH 协议无 banner。`/etc/dropbear/dropbear_ed25519_host_key` 报 `ENOENT`，需在 `tests/initramfs/build/initramfs_aarch64.cpio.gz` 中预置 host key。**与 vtable 修复无关**，是 initramfs 构建脚本的预存 gap。
+  2. **KEI_NO_DOM=1**：env var 由 `init_proc.rs` 推给用户空间 init 程序消费（用于 aris-render 跳过 DOM 创建）。本次修复的是**内核** vtable crash；用户空间 fontique/skrifa 的 vtable panic 仍未修（见 2026-07-15 早些时 kei-echo 的结论：fork 删除，转向修 kernel）。**保留** `KEI_NO_DOM=1` 不变。
+  3. **`O_APPEND` + `open_file` 交互**：仍为预存 FIXME（`read()` / `write_at()` 中有标记），与本次 vtable 修复无关，且涉及并发语义，需独立设计。
+  4. **`packages/bsp/jh7110/src/lib.rs`**：kei-echo agent 并行修改（解除 skeleton `compile_error!`，改为 no-op init）。**未提交**，留待 kei-echo 提交。
+  5. **`packages/ostd/src/io/io_mem/mod.rs` 的"linear mapping workaround"** 是 aarch64 临时绕过方案（用 `wrapping_*` 算术恢复 linear_va），非通用正确实现。`FIXME: We currently do not limit the I/O memory allocator with the maximum GPA`（line 109）仍待修。
 - **后续动作**：
-  1. ~~验证网关模式~~ ✅ aarch64 启动链路通；SSH banner 需修复 dropbear host key
-  2. 验证移除 `KEI_NO_DOM=1` 后 Blitz DOM 仍可运行（已修复 vtable）
-  3. 跨仓 `[patch]` 收敛到 `~/.cargo/config.toml`（aster 派生链共用）。
+  1. ~~验证网关模式~~ ✅ aarch64 启动链路通
+  2. ~~验证 vtable 修复~~ ✅ 全部 I/O syscall + dropbear listen
+  3. **下一步**：(a) 修复 dropbear host key 让 SSH 端到端通；(b) 视 kei-echo 决定是否合入 jh7110 修改；(c) 跨仓 `[patch]` 收敛到 `~/.cargo/config.toml`（aster 派生链共用）。
 - **跨仓依赖**：vtty 协议与 `kou` 对接；浏览器 UI 复用 `aris`；内核 fork 自 aster（见顶层 `patches/` 长期方案）。
 
 ## Refresh log 2026-07-14
