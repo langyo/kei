@@ -126,26 +126,27 @@ impl<SecuritySensitivity> IoMem<SecuritySensitivity> {
             priv_flags,
         };
 
-        // On aarch64 QEMU TCG, the VMALLOC mapping created by KVirtArea
-        // works for reads but silently drops writes (the virtio device
-        // never sees DRIVER_OK etc.). The linear mapping (LINEAR_BASE + PA)
-        // works for both reads and writes. Use it instead of creating a
-        // new VMALLOC mapping.
+/// On aarch64 QEMU TCG, the VMALLOC-based mapping created by KVirtArea
+/// works for reads but silently drops writes (the virtio device never sees
+/// DRIVER_OK etc.). The boot page table's linear mapping (L0 entry 256,
+/// 1 GiB block descriptors covering PA range 0x0..0x1_0000_0000 at
+/// VA 0xffff_8000_0000_0000 via the identity L1 table) works for both
+/// reads and writes. We use this linear mapping instead of creating a
+/// new VMALLOC mapping until the kernel page table cursor bug is fixed
+/// (see PLAN.md § "virtio-gpu 黑屏根因修正").
+///
+/// The `wrapping_*` arithmetic in `base()` / `read_once()` / `write_once()`
+/// pairs with the offset calculation below — both the KVirtArea start VA
+/// and the linear-mapping VA live in the kernel half (top bit set), so
+/// direct `+` would overflow `usize` in debug builds.
         #[cfg(target_arch = "aarch64")]
         {
-            const LINEAR_BASE: usize = 0xffff_8000_0000_0000;
             let kva = unsafe {
                 KVirtArea::map_untracked_frames(area_size, 0, frames_range.clone(), prop)
             };
-            // Override: use linear mapping address as the base
-            let linear_va = LINEAR_BASE + first_page_start;
-            // We can't easily change KVirtArea's start(), so we store the
-            // linear VA in a way that base() returns it. Since base() returns
-            // kvirt_area.start() + offset, we need kvirt_area.start() to be
-            // linear_va. But KVirtArea manages its own VA range.
-            // Instead, we'll use a simpler approach: set offset to make
-            // base() = linear_va. base() = kvirt_area.start() + offset.
-            // So offset = linear_va - kvirt_area.start() + (range.start - first_page_start).
+            // Override: use boot page table's linear mapping instead of
+            // KVirtArea's VMALLOC mapping (see DEVICE_LINEAR_BASE doc).
+            let linear_va = DEVICE_LINEAR_BASE + first_page_start;
             let real_offset = range.start - first_page_start;
             let linear_offset = linear_va.wrapping_sub(kva.start()) + real_offset;
 
@@ -192,12 +193,9 @@ impl<SecuritySensitivity> IoMem<SecuritySensitivity> {
 
     /// Returns the base virtual address of the MMIO range.
     ///
-    /// On aarch64, [`Self::new`] sets `offset` such that the linear-mapping
-    /// VA is recovered: `linear_va = kva.start().wrapping_add(offset)`. The
-    /// `wrapping_*` arithmetic is intentional because both `kva.start()` and
-    /// the recovered VA live in the high kernel half and a naive `+` would
-    /// overflow. Callers receive this VA and pass user-supplied offsets to
-    /// `read_once`/`write_once`, which combine everything in `usize`.
+    /// On aarch64, [`Self::new`] computes `offset` such that the boot page
+    /// table's linear-mapping VA is recovered: `linear_va = kva.start()
+    /// .wrapping_add(offset)`. See [`DEVICE_LINEAR_BASE`] for rationale.
     fn base(&self) -> usize {
         self.kvirt_area.deref().start().wrapping_add(self.offset)
     }

@@ -235,8 +235,16 @@ unsafe impl PteTrait for PageTableEntry {
 }
 
 pub(in crate::arch) fn paddr_to_daddr(pa: Paddr) -> usize {
-    // TODO: Define device linear mapping base for ARM64
-    const DEVICE_LINEAR_MAPPING_BASE_VADDR: usize = 0x8000_0000_0000_0000;
+    // The boot page table maps PA range 0x0_0000_0000..0x1_0000_0000 at
+    // VA 0xffff_8000_0000_0000 (L0 entry 256, reusing the identity L1
+    // table via 1 GiB block descriptors). This is the canonical sign-
+    // extended VA for the first 4 GiB of the upper half of a 48-bit
+    // address space (TTBR1_EL1, T1SZ=16).
+    //
+    // KVirtArea's VMALLOC-based mapping is unreliable on QEMU TCG
+    // (writes are silently dropped), so I/O memory drivers use this
+    // boot-page-table linear mapping as a workaround.
+    const DEVICE_LINEAR_MAPPING_BASE_VADDR: usize = 0xffff_8000_0000_0000;
     pa + DEVICE_LINEAR_MAPPING_BASE_VADDR
 }
 

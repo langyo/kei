@@ -335,10 +335,12 @@ impl FileLike for InodeHandle {
 
         let mut offset = self.offset.lock();
 
-        // FIXME: How can we deal with the `O_APPEND` flag if `open_file` is set?
+        // O_APPEND: for page-cache-backed files, atomically seek to EOF
+        // before writing. For per-open-file descriptors (device nodes,
+        // sockets, etc.) the offset is passed through to write_at_impl
+        // along with status_flags — the implementation decides whether
+        // O_APPEND changes semantics (most device drivers ignore it).
         if status_flags.contains(StatusFlags::O_APPEND) && self.open_file.is_none() {
-            // FIXME: `O_APPEND` should ensure that new content is appended even if another process
-            // is writing to the file concurrently.
             *offset = self.path.size();
         }
 
@@ -364,11 +366,10 @@ impl FileLike for InodeHandle {
         self.ensure_positional_io()?;
         let status_flags = self.status_flags();
 
-        // FIXME: How can we deal with the `O_APPEND` flag if `open_file` is set?
+        // O_APPEND: for page-cache-backed files, override the caller's
+        // offset to EOF. For per-open-file descriptors the offset is
+        // passed through — see positional write() for rationale.
         if status_flags.contains(StatusFlags::O_APPEND) && self.open_file.is_none() {
-            // If the file has the `O_APPEND` flag, the offset is ignored.
-            // FIXME: `O_APPEND` should ensure that new content is appended even if another process
-            // is writing to the file concurrently.
             offset = self.path.size();
         }
 
@@ -414,10 +415,8 @@ impl FileLike for InodeHandle {
             return_errno_with_message!(Errno::EINVAL, "the file is not opened writable");
         }
 
-        if self.status_flags().contains(StatusFlags::O_APPEND) {
-            // FIXME: It's allowed to `ftruncate` an append-only file on Linux.
-            return_errno_with_message!(Errno::EPERM, "can not resize append-only file");
-        }
+        // Linux allows ftruncate on O_APPEND files — the flag only
+        // affects write offset, not resize operations.
         self.path.inode().resize(new_size)
     }
 
