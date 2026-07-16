@@ -20,8 +20,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y qemu-system-arm
       - name: Boot test aarch64
         run: |
-          chmod +x scripts/*.sh
-          ./scripts/test-all-arch.sh aarch64
+          chmod +x scripts/*.sh 2>/dev/null; true
+          python3 scripts/test_all_arch.py aarch64
 
   test-x86_64:
     runs-on: ubuntu-latest
@@ -36,8 +36,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y qemu-system-x86
       - name: Boot test x86_64
         run: |
-          chmod +x scripts/*.sh
-          ./scripts/test-all-arch.sh x86_64
+          chmod +x scripts/*.sh 2>/dev/null; true
+          python3 scripts/test_all_arch.py x86_64
 
   test-riscv64:
     runs-on: ubuntu-latest
@@ -53,5 +53,5 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y qemu-system-misc
       - name: Boot test riscv64
         run: |
-          chmod +x scripts/*.sh
-          ./scripts/test-all-arch.sh riscv64
+          chmod +x scripts/*.sh 2>/dev/null; true
+          python3 scripts/test_all_arch.py riscv64
