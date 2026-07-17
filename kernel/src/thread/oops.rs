@@ -75,11 +75,11 @@ static OOPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 #[ostd::panic_handler]
 fn panic_handler(info: &core::panic::PanicInfo) -> ! {
-    // DIAGNOSTIC (aarch64): ostd::error!/log output isn't visible during early
-    // aarch64 boot (log backend may not be fully wired). Write the panic
-    // location/message directly to the PL011 UART data register at its linear
-    // address using early_println, which bypasses the log system.
-    #[cfg(target_arch = "aarch64")]
+    // DIAGNOSTIC (aarch64/riscv64): ostd::error!/log output isn't visible
+    // during early boot on the qemu-direct paths (log backend not wired up).
+    // Write the panic location/message directly via early_println (PL011 on
+    // aarch64, SBI console on riscv64), bypassing the log system.
+    #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
     {
         if let Some(location) = info.location() {
             ostd::early_println!(

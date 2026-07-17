@@ -40,10 +40,7 @@ fn spawn_background_poll_thread(iface: Arc<Iface>) {
                 aster_network::raise_send_softirq();
                 aster_network::raise_receive_softirq();
                 iface.poll();
-                let _ = wait_queue.wait_until_or_timeout(
-                    || None::<()>,
-                    &Duration::from_millis(2),
-                );
+                let _ = wait_queue.wait_until_or_timeout(|| None::<()>, &Duration::from_millis(2));
             }
         }
 

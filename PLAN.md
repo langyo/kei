@@ -2,6 +2,30 @@
 
 > 本文件于 **2026-07-15** 更新，记录项目当前状态、近期进展与后续计划。
 
+## Refresh log 2026-07-17 (agent/vtty-linux-console：vtty 链路切到 kei_tty)
+
+- **渲染链路切换**：kei 转型期只做 vtty 不做 GUI。`just build browser`（别名
+  `just build vtty`）现在交叉编译 aris-render 的 `kei_tty`（`--no-default-features
+  --features png`，静态 musl ELF），取代原来的 `kei_desktop` GUI 链路；
+  `just render` / `wslq-run` / `wslq-initramfs` 默认 initramfs 改为
+  `initramfs_kei_tty.cpio.gz`（`initramfs_render_new.cpio.gz` 在树内已无生产者）。
+- **vtty 风格**：现代 Linux 内核控制台——黑底、浅色等宽字、`[    0.000000]
+  kei: ...` 内核日志式排版、底部 shell 提示符；无科幻元素。控制台帧由 aris 侧
+  `prerender_vtty` 在主机离线渲染成 PNG 入 aris 仓，kei_tty 内嵌解码 blit 到
+  /dev/fb0；WS JSON-RPC 网关（:8423）不变。
+- **文字渲染根因**（aris 侧修复）：fontique `register_fonts` 不填充
+  generic-family / fallback 映射 → CSS 通用族匹配 0 字体 → parley 零 glyph。
+  aris `fix/font-in-tree` 分支已修（`new_embedded_font_context()` 显式接线），
+  并新增 41 KB DejaVu Sans Mono 子集内嵌字体。
+- **scripts/build_render_initramfs.py**：默认 bin kei_ui → kei_tty；按 bin
+  映射 cargo feature（kei_tty=png / kei_ui=render / kei_fbtest=∅），全部
+  `--no-default-features`；打包前自建输出目录。
+- **跨仓依赖**：需要 aris `fix/font-in-tree` 分支（celestia-island/aris 的
+  Draft PR，base dev）。联调：kei 根目录 `.env`（gitignored）把 `ARIS_REPO`
+  指到对应 aris 检出即可；仓库内默认仍是 `../aris`。
+- **验证**：aarch64-unknown-linux-musl `kei_tty` 交叉编译成功；initramfs 打包
+  产出 `initramfs_kei_tty.cpio.gz`；QEMU 端到端启动验证留待集成后进行。
+
 ## Refresh log 2026-07-15 #6 (aarch64 SMP/PSCI 多核启动)
 
 - **aarch64 SMP 支持实现**：从 stub 到完整的多核启动：

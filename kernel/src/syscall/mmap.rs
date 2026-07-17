@@ -39,14 +39,24 @@ pub fn sys_mmap(
             if len > 0x10000 {
                 ostd::early_println!(
                     "[mmap] OK addr={:#x} len={:#x} ({:.1}KB) -> {:#x} flags={:#x} fd={}",
-                    addr, len, len as f64 / 1024.0, ret_addr, flags, fd
+                    addr,
+                    len,
+                    len as f64 / 1024.0,
+                    ret_addr,
+                    flags,
+                    fd
                 );
             }
         }
         Err(e) => {
             ostd::early_println!(
                 "[mmap] FAIL addr={:#x} len={:#x} ({:.1}KB) flags={:#x} fd={} err={:?}",
-                addr, len, len as f64 / 1024.0, flags, fd, e
+                addr,
+                len,
+                len as f64 / 1024.0,
+                flags,
+                fd,
+                e
             );
         }
     }

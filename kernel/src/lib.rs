@@ -49,6 +49,8 @@ mod device;
 mod driver;
 mod error;
 mod events;
+#[cfg(target_arch = "aarch64")]
+mod fb_console;
 mod fs;
 mod init;
 mod ipc;
@@ -57,6 +59,8 @@ mod prelude;
 mod process;
 mod sched;
 mod security;
+#[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
+mod serial_console;
 mod syscall;
 mod thread;
 mod time;
@@ -64,10 +68,6 @@ mod util;
 #[cfg(target_arch = "x86_64")]
 mod vbe_dispi;
 mod vga_text;
-#[cfg(target_arch = "aarch64")]
-mod fb_console;
-#[cfg(target_arch = "aarch64")]
-mod serial_console;
 /// Re-export of the raw virtio-gpu framebuffer accessors so the
 /// FramebufferConsole can read/flush the display without going through the
 /// component system (which isn't wired up on aarch64 yet).

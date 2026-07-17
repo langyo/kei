@@ -33,8 +33,18 @@ pub fn sys_write(
             #[cfg(target_arch = "aarch64")]
             {
                 match &result {
-                    Ok(n) => ostd::early_println!("[syscall] write(fd={}, len={}) OK={}", raw_fd, user_buf_len, n),
-                    Err(e) => ostd::early_println!("[syscall] write(fd={}, len={}) FAILED: {:?}", raw_fd, user_buf_len, e.error()),
+                    Ok(n) => ostd::early_println!(
+                        "[syscall] write(fd={}, len={}) OK={}",
+                        raw_fd,
+                        user_buf_len,
+                        n
+                    ),
+                    Err(e) => ostd::early_println!(
+                        "[syscall] write(fd={}, len={}) FAILED: {:?}",
+                        raw_fd,
+                        user_buf_len,
+                        e.error()
+                    ),
                 }
             }
             #[cfg(not(target_arch = "aarch64"))]

@@ -388,13 +388,38 @@ pub fn handle_syscall(ctx: &Context, user_ctx: &mut UserContext) {
                 {
                     let num = syscall_frame.syscall_number;
                     // Trace ALL syscalls except high-frequency ones
-                    if !matches!(num, 113|139|80|222|226|215|135|96|98|99|97|261|260|160|161|162|163|78) {
+                    if !matches!(
+                        num,
+                        113 | 139
+                            | 80
+                            | 222
+                            | 226
+                            | 215
+                            | 135
+                            | 96
+                            | 98
+                            | 99
+                            | 97
+                            | 261
+                            | 260
+                            | 160
+                            | 161
+                            | 162
+                            | 163
+                            | 78
+                    ) {
                         let a = syscall_frame.args;
                         // For read/write/writev/close/fcntl, show fd (first arg)
-                        if matches!(num, 63|64|66|57|25|29|23) {
+                        if matches!(num, 63 | 64 | 66 | 57 | 25 | 29 | 23) {
                             ostd::early_println!("[syscall] #{}({}) -> ok {}", num, a[0], rv);
                         } else if matches!(num, 24) {
-                            ostd::early_println!("[syscall] #{}({},{}) -> ok {}", num, a[0], a[1], rv);
+                            ostd::early_println!(
+                                "[syscall] #{}({},{}) -> ok {}",
+                                num,
+                                a[0],
+                                a[1],
+                                rv
+                            );
                         } else {
                             ostd::early_println!("[syscall] #{} -> ok {}", num, rv);
                         }
@@ -408,7 +433,26 @@ pub fn handle_syscall(ctx: &Context, user_ctx: &mut UserContext) {
             #[cfg(target_arch = "aarch64")]
             {
                 let num = syscall_frame.syscall_number;
-                if !matches!(num, 113|139|80|222|226|215|135|96|98|99|97|261|260|160|161|162|163|78) {
+                if !matches!(
+                    num,
+                    113 | 139
+                        | 80
+                        | 222
+                        | 226
+                        | 215
+                        | 135
+                        | 96
+                        | 98
+                        | 99
+                        | 97
+                        | 261
+                        | 260
+                        | 160
+                        | 161
+                        | 162
+                        | 163
+                        | 78
+                ) {
                     ostd::early_println!("[syscall] #{} -> ERR {:?}", num, err.error());
                 }
             }

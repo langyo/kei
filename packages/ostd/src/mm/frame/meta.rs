@@ -493,7 +493,11 @@ pub(crate) unsafe fn init() -> Segment<MetaPageMeta> {
     let tot_nr_frames = max_paddr / page_size::<PagingConsts>(1);
     crate::early_println!("[meta] tot_nr_frames = {}", tot_nr_frames);
     let (nr_meta_pages, meta_pages) = alloc_meta_frames(tot_nr_frames);
-    crate::early_println!("[meta] nr_meta_pages = {} meta_pages = {:#x}", nr_meta_pages, meta_pages);
+    crate::early_println!(
+        "[meta] nr_meta_pages = {} meta_pages = {:#x}",
+        nr_meta_pages,
+        meta_pages
+    );
 
     // Map the metadata frames.
     crate::early_println!("[meta] mapping metadata frames...");
@@ -518,7 +522,11 @@ pub(crate) unsafe fn init() -> Segment<MetaPageMeta> {
     crate::early_println!("[meta] MAX_PADDR stored, continuing init...");
 
     let meta_page_range = meta_pages..meta_pages + nr_meta_pages * PAGE_SIZE;
-    crate::early_println!("[meta] meta_page_range = {:#x}..{:#x}", meta_page_range.start, meta_page_range.end);
+    crate::early_println!(
+        "[meta] meta_page_range = {:#x}..{:#x}",
+        meta_page_range.start,
+        meta_page_range.end
+    );
 
     crate::early_println!("[meta] getting allocated regions...");
     let (range_1, range_2) = allocator::EARLY_ALLOCATOR
@@ -563,8 +571,11 @@ fn alloc_meta_frames(tot_nr_frames: usize) -> (usize, Paddr) {
         .checked_mul(size_of::<MetaSlot>())
         .unwrap()
         .div_ceil(PAGE_SIZE);
-    crate::early_println!("[meta] alloc_meta: nr_meta_pages={}, need {} bytes",
-        nr_meta_pages, nr_meta_pages * PAGE_SIZE);
+    crate::early_println!(
+        "[meta] alloc_meta: nr_meta_pages={}, need {} bytes",
+        nr_meta_pages,
+        nr_meta_pages * PAGE_SIZE
+    );
     let paddr = allocator::early_alloc(
         Layout::from_size_align(nr_meta_pages * PAGE_SIZE, PAGE_SIZE).unwrap(),
     )
@@ -578,11 +589,17 @@ fn alloc_meta_frames(tot_nr_frames: usize) -> (usize, Paddr) {
     crate::early_println!("[meta] alloc_meta: testing write to slots[0]...");
     unsafe { (slots as *mut u8).write_volatile(0xAA) };
     let readback = unsafe { (slots as *const u8).read_volatile() };
-    crate::early_println!("[meta] alloc_meta: write test OK (readback={:#x})", readback);
+    crate::early_println!(
+        "[meta] alloc_meta: write test OK (readback={:#x})",
+        readback
+    );
 
     // Initialize the metadata slots.
     // First zero the entire region with write_bytes (faster + simpler).
-    crate::early_println!("[meta] zeroing {} bytes at slots...", tot_nr_frames * size_of::<MetaSlot>());
+    crate::early_println!(
+        "[meta] zeroing {} bytes at slots...",
+        tot_nr_frames * size_of::<MetaSlot>()
+    );
     unsafe { core::ptr::write_bytes(slots as *mut u8, 0, tot_nr_frames * size_of::<MetaSlot>()) };
     crate::early_println!("[meta] zeroing done");
 

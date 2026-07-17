@@ -105,8 +105,8 @@ impl NetworkDevice {
         };
         for i in 0..QUEUE_SIZE {
             let rx_pool = RX_BUFFER_POOL.get().unwrap();
-            let rx_buffer = RxBuffer::new(hdr_len, rx_pool)
-                .map_err(VirtioDeviceError::ResourceAlloc)?;
+            let rx_buffer =
+                RxBuffer::new(hdr_len, rx_pool).map_err(VirtioDeviceError::ResourceAlloc)?;
             let token = recv_queue.add_output_bufs(&[&rx_buffer]).unwrap();
             assert_eq!(i, token);
             assert_eq!(rx_buffers.put(rx_buffer) as u16, i);
@@ -188,8 +188,8 @@ impl NetworkDevice {
             // FIXME: Ideally, we can reuse the returned buffer without creating new buffer.
             // But this requires locking device to be compatible with smoltcp interface.
             let rx_pool = RX_BUFFER_POOL.get().unwrap();
-            let new_rx_buffer = RxBuffer::new(self.hdr_len, rx_pool)
-                .map_err(|_| NetError::NoMemory)?;
+            let new_rx_buffer =
+                RxBuffer::new(self.hdr_len, rx_pool).map_err(|_| NetError::NoMemory)?;
 
             self.new_rx_buffer = Some(new_rx_buffer);
         }
@@ -198,7 +198,10 @@ impl NetworkDevice {
             .recv_queue
             .pop_used_with_min_bytes(self.hdr_len)
             .map_err(|_| {
-                ostd::early_println!("[netdev] recv: no packet, can_pop={}", self.recv_queue.can_pop());
+                ostd::early_println!(
+                    "[netdev] recv: no packet, can_pop={}",
+                    self.recv_queue.can_pop()
+                );
                 NetError::NotReady
             })?;
         ostd::early_println!("[netdev] recv: GOT PACKET token={} len={}", token, len);

@@ -21,12 +21,12 @@ use crate::{
 };
 
 pub fn init() {
-    // On aarch64 the inventory-based component system is bypassed, so the
-    // systree singleton (normally set by aster_systree's #[init_component])
-    // is never initialized. vfs::init → registry::init calls
-    // sysfs::systree_singleton().root().add_child().unwrap(), which panics.
-    // Initialize the systree singleton manually before vfs::init.
-    #[cfg(target_arch = "aarch64")]
+    // On aarch64 and riscv64 the inventory-based component system is bypassed,
+    // so the systree singleton (normally set by aster_systree's
+    // #[init_component]) is never initialized. vfs::init → registry::init
+    // calls sysfs::systree_singleton().root().add_child().unwrap(), which
+    // panics. Initialize the systree singleton manually before vfs::init.
+    #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
     {
         aster_systree::init_no_component();
         ostd::early_println!("[fs] systree init_no_component done");

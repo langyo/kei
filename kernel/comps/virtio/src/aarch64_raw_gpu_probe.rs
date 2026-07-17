@@ -123,7 +123,9 @@ fn cmd_alloc(n: usize) -> usize {
     }
 }
 fn cmd_reset() {
-    unsafe { CMD_OFF = 0; }
+    unsafe {
+        CMD_OFF = 0;
+    }
 }
 
 // ── Kernel framebuffer ───────────────────────────────────────────────────
@@ -242,7 +244,10 @@ impl GpuQueue {
 
         // Publish cmd_slot in avail ring at position (idx % qsize).
         let avail_pos = (idx as usize) % self.qsize;
-        write_volatile((self.avail_base + 4 + 2 * avail_pos) as *mut u16, cmd_slot as u16);
+        write_volatile(
+            (self.avail_base + 4 + 2 * avail_pos) as *mut u16,
+            cmd_slot as u16,
+        );
         core::sync::atomic::fence(Ordering::SeqCst);
         let new_avail = (idx.wrapping_add(1) as u16) as u16;
         write_volatile((self.avail_base + 2) as *mut u16, new_avail);
@@ -269,7 +274,10 @@ impl GpuQueue {
         for _ in 0..100_000u64 {
             let ui = read_volatile((self.used_base + 2) as *const u16);
             if ui == expected {
-                USED_IDX.store(USED_IDX.load(Ordering::Relaxed).wrapping_add(1), Ordering::Relaxed);
+                USED_IDX.store(
+                    USED_IDX.load(Ordering::Relaxed).wrapping_add(1),
+                    Ordering::Relaxed,
+                );
                 ok = true;
                 break;
             }
@@ -283,7 +291,10 @@ impl GpuQueue {
                 core::hint::spin_loop();
             }
             // Assume the command completed and update our internal counter
-            USED_IDX.store(USED_IDX.load(Ordering::Relaxed).wrapping_add(1), Ordering::Relaxed);
+            USED_IDX.store(
+                USED_IDX.load(Ordering::Relaxed).wrapping_add(1),
+                Ordering::Relaxed,
+            );
         }
 
         // Drain interrupt status
@@ -346,7 +357,11 @@ fn init_gpu(mmio_base: usize) {
     mmio_w(mmio_base, REG_STATUS, 0);
     mmio_w(mmio_base, REG_STATUS, STATUS_ACK | STATUS_DRIVER);
     mmio_w(mmio_base, REG_DRIVER_FEATURES, 0);
-    mmio_w(mmio_base, REG_STATUS, STATUS_ACK | STATUS_DRIVER | STATUS_FEAT_OK);
+    mmio_w(
+        mmio_base,
+        REG_STATUS,
+        STATUS_ACK | STATUS_DRIVER | STATUS_FEAT_OK,
+    );
     if mmio_r(mmio_base, REG_STATUS) & STATUS_FEAT_OK == 0 {
         ostd::early_println!("[virtio-gpu] FEATURES_OK failed!");
         return;
@@ -434,12 +449,7 @@ fn init_gpu(mmio_base: usize) {
             let w = read_volatile((resp_va + 24 + 8) as *const u32);
             let h = read_volatile((resp_va + 24 + 12) as *const u32);
             let enabled = read_volatile((resp_va + 24 + 16) as *const u32);
-            ostd::early_println!(
-                "[virtio-gpu] scanout[0]: {}x{} enabled={}",
-                w,
-                h,
-                enabled
-            );
+            ostd::early_println!("[virtio-gpu] scanout[0]: {}x{} enabled={}", w, h, enabled);
             display_w = w;
             display_h = h;
         } else {
@@ -461,7 +471,9 @@ fn init_gpu(mmio_base: usize) {
         FRAMEBUFFER_PA_OVERRIDE = FB_PA;
         ostd::early_println!(
             "[virtio-gpu] FB fixed: va={:#x} pa={:#x} size={}",
-            va, FB_PA, FB_SIZE
+            va,
+            FB_PA,
+            FB_SIZE
         );
     }
 
@@ -501,7 +513,10 @@ fn init_gpu(mmio_base: usize) {
             let ipa = translate_va_to_pa(va);
             ostd::early_println!(
                 "[virtio-gpu] ATTACH_BACKING: fb_va={:#x} fb_pa={:#x} ipa={:#x} len={}",
-                va, pa, ipa, FB_SIZE
+                va,
+                pa,
+                ipa,
+                FB_SIZE
             );
             (va, pa)
         };
@@ -586,7 +601,8 @@ pub fn publish_framebuffer() -> bool {
     use alloc::sync::Arc;
     let fb_base = unsafe { FRAMEBUFFER_VA };
     let fb_size = FB_WIDTH as usize * FB_HEIGHT as usize * FB_BPP;
-    let backing = aster_framebuffer::framebuffer::BlitBackend::new(fb_base, fb_size, raw_flush_callback);
+    let backing =
+        aster_framebuffer::framebuffer::BlitBackend::new(fb_base, fb_size, raw_flush_callback);
     let fb = aster_framebuffer::framebuffer::FrameBuffer::new_blit(
         backing,
         FB_WIDTH as usize,
@@ -854,7 +870,11 @@ pub fn init_cursor() {
         let init_x = CURSOR_X.load(Ordering::Relaxed);
         let init_y = CURSOR_Y.load(Ordering::Relaxed);
         update_cursor_hw(CURSOR_RESOURCE_ID, 0, 0, init_x, init_y);
-        ostd::early_println!("[virtio-gpu] hardware cursor enabled at ({},{})", init_x, init_y);
+        ostd::early_println!(
+            "[virtio-gpu] hardware cursor enabled at ({},{})",
+            init_x,
+            init_y
+        );
     }
 }
 
@@ -1070,11 +1090,9 @@ fn draw_desktop_banner() {
     let h = FB_HEIGHT as usize;
     let row_size = w * FB_BPP;
     let mut row = [0u8; 1280 * 4];
-    let write_row = |y: usize, row: &[u8]| {
-        unsafe {
-            let dst = (FRAMEBUFFER_VA as *mut u8).add(y * row_size);
-            core::ptr::copy_nonoverlapping(row.as_ptr(), dst, row_size);
-        }
+    let write_row = |y: usize, row: &[u8]| unsafe {
+        let dst = (FRAMEBUFFER_VA as *mut u8).add(y * row_size);
+        core::ptr::copy_nonoverlapping(row.as_ptr(), dst, row_size);
     };
     let solid_row = |row: &mut [u8], r: u8, g: u8, b: u8| {
         for x in 0..w {
@@ -1090,10 +1108,28 @@ fn draw_desktop_banner() {
     for y in 0..60usize.min(h) {
         solid_row(&mut row, 0x1e, 0x2c, 0x3c);
         if y >= 18 && y < 38 {
-            draw_text_into_row(&mut row, w, b"kei", (w/2 - 12).max(0), y - 18, 0xFF, 0xFF, 0xFF);
+            draw_text_into_row(
+                &mut row,
+                w,
+                b"kei",
+                (w / 2 - 12).max(0),
+                y - 18,
+                0xFF,
+                0xFF,
+                0xFF,
+            );
         }
         if y >= 42 && y < 52 {
-            draw_text_into_row(&mut row, w, b"Loading...", (w/2 - 30).max(0), y - 42, 0x8a, 0x94, 0xa6);
+            draw_text_into_row(
+                &mut row,
+                w,
+                b"Loading...",
+                (w / 2 - 30).max(0),
+                y - 42,
+                0x8a,
+                0x94,
+                0xa6,
+            );
         }
         write_row(y, &row);
     }
@@ -1128,7 +1164,11 @@ fn draw_desktop() {
                 let span = (st - prev.0).max(1e-6);
                 let f = ((t - prev.0) / span).clamp(0.0, 1.0);
                 let lerp = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * f) as u8;
-                return [lerp(prev.1[0], sc[0]), lerp(prev.1[1], sc[1]), lerp(prev.1[2], sc[2])];
+                return [
+                    lerp(prev.1[0], sc[0]),
+                    lerp(prev.1[1], sc[1]),
+                    lerp(prev.1[2], sc[2]),
+                ];
             }
             prev = (st, sc);
         }
@@ -1184,8 +1224,10 @@ fn draw_desktop() {
 
     // 2. Desktop icons (2x2 grid, top-left).
     let icon_colors: [[u8; 3]; 4] = [
-        [0x36, 0x84, 0xE0], [0xE6, 0xC2, 0x4A],
-        [0x1E, 0x1E, 0x1E], [0xCC, 0x7A, 0x10],
+        [0x36, 0x84, 0xE0],
+        [0xE6, 0xC2, 0x4A],
+        [0x1E, 0x1E, 0x1E],
+        [0xCC, 0x7A, 0x10],
     ];
     let icon_pos = [(24, 20), (88, 20), (24, 92), (88, 92)];
     for i in 0..4 {
@@ -1220,9 +1262,12 @@ fn draw_desktop() {
     frect!(sm_x + 4, sm_y + 4, 6, sm_h - 8, 0x16, 0x76, 0x00);
     frect!(sm_x + 22, sm_y + 60, sm_w - 44, 22, 0xFF, 0xFF, 0xFF);
     let apps: [[u8; 3]; 6] = [
-        [0x36, 0x84, 0xE0], [0xE6, 0xC2, 0x4A],
-        [0x1E, 0x1E, 0x1E], [0xCC, 0x7A, 0x10],
-        [0x7A, 0x4A, 0xC0], [0xC0, 0x4A, 0x7A],
+        [0x36, 0x84, 0xE0],
+        [0xE6, 0xC2, 0x4A],
+        [0x1E, 0x1E, 0x1E],
+        [0xCC, 0x7A, 0x10],
+        [0x7A, 0x4A, 0xC0],
+        [0xC0, 0x4A, 0x7A],
     ];
     let tile_w = (sm_w - 44 - 8) / 2;
     for (i, col) in apps.iter().enumerate() {
@@ -1244,9 +1289,7 @@ fn draw_desktop() {
     frect!(sx + 13, sy, 11, 11, 0xFF, 0xFF, 0xFF);
     frect!(sx, sy + 13, 11, 11, 0xFF, 0xFF, 0xFF);
     frect!(sx + 13, sy + 13, 11, 11, 0xFF, 0xFF, 0xFF);
-    let pinned: [[u8; 3]; 3] = [
-        [0x36, 0x84, 0xE0], [0xE6, 0xC2, 0x4A], [0x1E, 0x1E, 0x1E],
-    ];
+    let pinned: [[u8; 3]; 3] = [[0x36, 0x84, 0xE0], [0xE6, 0xC2, 0x4A], [0x1E, 0x1E, 0x1E]];
     let mut px = 120usize;
     for col in &pinned {
         frect!(px, tb_y + 6, 36, 28, 0x41, 0x3D, 0x3A);

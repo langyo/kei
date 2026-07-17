@@ -94,12 +94,10 @@ impl<E: Ext> TcpListener<E> {
             // When bound to INADDR_ANY (0.0.0.0), use addr=None so that smoltcp's
             // accepts() matches any local IP address.
             let listen_endpoint = match local_endpoint.addr {
-                IpAddress::Ipv4(addr) if addr == Ipv4Address::UNSPECIFIED => {
-                    IpListenEndpoint {
-                        addr: None,
-                        port: local_endpoint.port,
-                    }
-                }
+                IpAddress::Ipv4(addr) if addr == Ipv4Address::UNSPECIFIED => IpListenEndpoint {
+                    addr: None,
+                    port: local_endpoint.port,
+                },
                 _ => IpListenEndpoint::from(local_endpoint),
             };
 

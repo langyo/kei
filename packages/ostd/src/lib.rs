@@ -139,7 +139,9 @@ unsafe fn init() {
     // On aarch64 we skipped page table activation, so dismiss is a no-op
     // (the boot page table is still active and needed).
     #[cfg(not(target_arch = "aarch64"))]
-    unsafe { mm::page_table::boot_pt::dismiss() };
+    unsafe {
+        mm::page_table::boot_pt::dismiss()
+    };
     #[cfg(target_arch = "aarch64")]
     crate::early_println!("[ostd] init: boot_pt::dismiss (SKIPPED on aarch64)");
 
@@ -165,12 +167,20 @@ fn invoke_ffi_init_funcs() {
         fn __einit_array();
     }
     let call_len = (__einit_array as *const () as usize - __sinit_array as *const () as usize) / 8;
-    crate::early_println!("[ostd] ffi_init: {} functions at [{:#x}..{:#x}]",
-        call_len, __sinit_array as usize, __einit_array as usize);
+    crate::early_println!(
+        "[ostd] ffi_init: {} functions at [{:#x}..{:#x}]",
+        call_len,
+        __sinit_array as usize,
+        __einit_array as usize
+    );
     for i in 0..call_len {
         unsafe {
             let function = (__sinit_array as *const () as usize + 8 * i) as *const fn();
-            crate::early_println!("[ostd] ffi_init: calling function {} at {:#x}", i, function as usize);
+            crate::early_println!(
+                "[ostd] ffi_init: calling function {} at {:#x}",
+                i,
+                function as usize
+            );
             (*function)();
         }
     }

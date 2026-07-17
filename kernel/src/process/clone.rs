@@ -441,7 +441,9 @@ fn clone_child_task(
             let has_settls = clone_flags.contains(CloneFlags::CLONE_SETTLS);
             ostd::early_println!(
                 "[clone] TLS settls={} child={:#x} parent={:#x}",
-                has_settls, child_tls, ostd::arch::read_tpidr_el0()
+                has_settls,
+                child_tls,
+                ostd::arch::read_tpidr_el0()
             );
         }
     }

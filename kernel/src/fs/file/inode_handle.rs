@@ -142,7 +142,10 @@ impl InodeHandle {
         if let Some(ref open_file) = self.open_file {
             open_file.read_at(offset, writer, status_flags)
         } else {
-            self.path.inode().as_ref().read_at(offset, writer, status_flags)
+            self.path
+                .inode()
+                .as_ref()
+                .read_at(offset, writer, status_flags)
         }
     }
 
@@ -156,7 +159,10 @@ impl InodeHandle {
         if let Some(ref open_file) = self.open_file {
             open_file.write_at(offset, reader, status_flags)
         } else {
-            self.path.inode().as_ref().write_at(offset, reader, status_flags)
+            self.path
+                .inode()
+                .as_ref()
+                .write_at(offset, reader, status_flags)
         }
     }
 

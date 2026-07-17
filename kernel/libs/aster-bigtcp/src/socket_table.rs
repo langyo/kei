@@ -300,13 +300,10 @@ impl<E: Ext> SocketTable<E> {
             &self.listener_buckets[bucket_index as usize]
         };
 
-        wildcard_bucket
-            .listeners
-            .iter()
-            .find(|listener| {
-                let lk = listener.listener_key();
-                lk.port() == key.port() && lk.addr() == wildcard_addr
-            })
+        wildcard_bucket.listeners.iter().find(|listener| {
+            let lk = listener.listener_key();
+            lk.port() == key.port() && lk.addr() == wildcard_addr
+        })
     }
 
     pub(crate) fn lookup_connection(

@@ -151,7 +151,12 @@ impl<E: Ext> RawTcpSocketExt<E> {
             if self.state() == State::Closed && is_rst {
                 self.is_rst_closed = true;
             }
-            ostd::early_println!("[tcp] state {:?} -> {:?}, may_send={}", old_state, self.state(), self.may_send());
+            ostd::early_println!(
+                "[tcp] state {:?} -> {:?}, may_send={}",
+                old_state,
+                self.state(),
+                self.may_send()
+            );
             self.on_new_state(this)
         } else {
             SocketEvents::empty()

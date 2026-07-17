@@ -98,13 +98,25 @@ pub fn load_elf_to_vmar(
     let load_bias = elf_mapped_info.full_range.load_bias();
     let tls_pointer = {
         #[cfg(target_arch = "aarch64")]
-        { tls::setup_tls::<tls::TlsLayoutAarch64>(vmar, &elf_headers, load_bias) }
+        {
+            tls::setup_tls::<tls::TlsLayoutAarch64>(vmar, &elf_headers, load_bias)
+        }
         #[cfg(target_arch = "riscv64")]
-        { tls::setup_tls::<tls::TlsLayoutRiscv64>(vmar, &elf_headers, load_bias) }
+        {
+            tls::setup_tls::<tls::TlsLayoutRiscv64>(vmar, &elf_headers, load_bias)
+        }
         #[cfg(target_arch = "x86_64")]
-        { tls::setup_tls::<tls::TlsLayoutX8664>(vmar, &elf_headers, load_bias) }
-        #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64", target_arch = "x86_64")))]
-        { None }
+        {
+            tls::setup_tls::<tls::TlsLayoutX8664>(vmar, &elf_headers, load_bias)
+        }
+        #[cfg(not(any(
+            target_arch = "aarch64",
+            target_arch = "riscv64",
+            target_arch = "x86_64"
+        )))]
+        {
+            None
+        }
     };
 
     // On aarch64, apply ELF relocations at load time (like Linux binfmt_elf)
@@ -572,11 +584,7 @@ fn map_vdso_to_vmar(vmar: &Vmar) -> Option<Vaddr> {
 /// Linux's `binfmt_elf` does when it calls the architecture's relocation
 /// helper after mapping the segments.
 #[cfg(target_arch = "aarch64")]
-fn apply_relocations(
-    vmar: &Vmar,
-    elf_file: &Path,
-    relocated_range: &RelocatedRange,
-) -> Result<()> {
+fn apply_relocations(vmar: &Vmar, elf_file: &Path, relocated_range: &RelocatedRange) -> Result<()> {
     const SHT_RELA: u32 = 4;
     const R_AARCH64_RELATIVE: u32 = 1027;
     const R_AARCH64_GLOB_DAT: u32 = 1025;
@@ -622,7 +630,8 @@ fn apply_relocations(
         if sh_type != SHT_RELA {
             continue;
         }
-        let sh_offset = u64::from_le_bytes(shdr_buf[off + 24..off + 32].try_into().unwrap()) as usize;
+        let sh_offset =
+            u64::from_le_bytes(shdr_buf[off + 24..off + 32].try_into().unwrap()) as usize;
         let sh_size = u64::from_le_bytes(shdr_buf[off + 32..off + 40].try_into().unwrap()) as usize;
 
         let n_entries = sh_size / 24;

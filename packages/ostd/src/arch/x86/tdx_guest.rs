@@ -85,9 +85,7 @@ impl TargetPageState {
     fn as_gpa_mask(self) -> u64 {
         match self {
             Self::Private => 0,
-            Self::Shared => {
-                1u64 << SHARED_BIT
-            }
+            Self::Shared => 1u64 << SHARED_BIT,
         }
     }
 }

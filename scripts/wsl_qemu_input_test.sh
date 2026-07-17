@@ -11,7 +11,7 @@ set -u
 KEI="${KEI:-$HOME/celestia/kei}"
 BOOT_SECS="${1:-105}"
 MON_PORT="${MON_PORT:-55555}"
-INITRAMFS="${INITRAMFS:-$KEI/tests/initramfs/build/initramfs_render_new.cpio.gz}"
+INITRAMFS="${INITRAMFS:-$KEI/tests/initramfs/build/initramfs_kei_tty.cpio.gz}"
 KERNEL="${KERNEL:-$KEI/target/osdk/aster-kernel/aster-kernel-osdk-bin.image}"
 SERIAL_LOG="$KEI/target/wsl_input_serial.log"
 BEFORE_PPM="$KEI/target/wsl_input_before.ppm"

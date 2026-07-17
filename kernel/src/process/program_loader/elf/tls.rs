@@ -57,12 +57,7 @@ pub trait TlsLayout: Sized {
     /// `self`, `dtv` pointer, `locale` pointer.
     ///
     /// The allocated pages are already zeroed; only write the non-zero fields.
-    fn init_tcb(
-        vmar: &Vmar,
-        tls_base: Vaddr,
-        td_addr: Vaddr,
-        dtv_addr: Vaddr,
-    ) -> Result<Vaddr> {
+    fn init_tcb(vmar: &Vmar, tls_base: Vaddr, td_addr: Vaddr, dtv_addr: Vaddr) -> Result<Vaddr> {
         // self (offset 0x00): pointer to itself.
         write_u64_at(vmar, td_addr, td_addr as u64);
 
@@ -232,7 +227,11 @@ pub fn setup_tls<L: TlsLayout>(
 
         ostd::early_println!(
             "[tls] .tdata: phdr_va={:#x} template_va={:#x} filesz={} bias={:#x} copied={}",
-            tls_phdr_vaddr, template_va, tls_filesz, load_bias, copy_ok
+            tls_phdr_vaddr,
+            template_va,
+            tls_filesz,
+            load_bias,
+            copy_ok
         );
     } else if tls_filesz > 0 {
         // Negative load_bias: segments mapped below link-time addresses.
@@ -252,13 +251,19 @@ pub fn setup_tls<L: TlsLayout>(
 
         ostd::early_println!(
             "[tls] .tdata (no bias): phdr_va={:#x} filesz={} copied={}",
-            tls_phdr_vaddr, tls_filesz, copy_ok
+            tls_phdr_vaddr,
+            tls_filesz,
+            copy_ok
         );
     }
 
     ostd::early_println!(
         "[tls] musl: base={:#x} td={:#x} tp={:#x} dtv={:#x} psz={:#x}",
-        tls_base, td_addr, tp, dtv_addr, L::pthread_size()
+        tls_base,
+        td_addr,
+        tp,
+        dtv_addr,
+        L::pthread_size()
     );
 
     Some(tp)

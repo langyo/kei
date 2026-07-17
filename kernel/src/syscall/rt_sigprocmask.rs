@@ -5,7 +5,10 @@ use ostd::mm::VmIo;
 use super::SyscallReturn;
 use crate::{
     prelude::*,
-    process::{posix_thread::ContextPthreadAdminApi, signal::sig_mask::{SigMask, SigSet}},
+    process::{
+        posix_thread::ContextPthreadAdminApi,
+        signal::sig_mask::{SigMask, SigSet},
+    },
 };
 
 pub fn sys_rt_sigprocmask(
@@ -27,7 +30,10 @@ pub fn sys_rt_sigprocmask(
     }
     ostd::early_println!(
         "[sigprocmask] how={} set={:#x} old={:#x} sz={}",
-        how, set_ptr, oldset_ptr, sigset_size
+        how,
+        set_ptr,
+        oldset_ptr,
+        sigset_size
     );
     do_rt_sigprocmask(mask_op, set_ptr, oldset_ptr, ctx)?;
     ostd::early_println!("[sigprocmask] returning ok");

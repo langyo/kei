@@ -50,8 +50,7 @@ pub fn virtio_component_init_pub() -> Result<(), ComponentInitError> {
 }
 
 #[init_component]
-fn virtio_component_init() -> Result<(), ComponentInitError>
-{
+fn virtio_component_init() -> Result<(), ComponentInitError> {
     virtio_component_init_inner()
 }
 
@@ -103,8 +102,7 @@ fn virtio_component_init_inner() -> Result<(), ComponentInitError> {
         // used-ring bug. When the raw probe succeeded, drop this transport
         // without touching the device so the display stays live.
         #[cfg(target_arch = "aarch64")]
-        if matches!(device_type, VirtioDeviceType::Gpu)
-            && crate::aarch64_raw_gpu_probe::is_ready()
+        if matches!(device_type, VirtioDeviceType::Gpu) && crate::aarch64_raw_gpu_probe::is_ready()
         {
             ostd::early_println!(
                 "[virtio] dev #{}: GPU already claimed by raw probe, skipping reset",
@@ -151,7 +149,11 @@ fn virtio_component_init_inner() -> Result<(), ComponentInitError> {
                 Ok(())
             }
         };
-        ostd::early_println!("[virtio] dev #{} init result: {:?}", dev_idx, res.as_ref().err());
+        ostd::early_println!(
+            "[virtio] dev #{} init result: {:?}",
+            dev_idx,
+            res.as_ref().err()
+        );
         if res.is_err() {
             error!(
                 "Device initialization error: {:?}, device type: {:?}",

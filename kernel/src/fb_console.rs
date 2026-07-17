@@ -140,7 +140,9 @@ fn print_str_ansi(s: &str) {
                     b'P' => {
                         // DCS (Device Control String) — start Sixel accumulation
                         ostd::early_println!("[fb_console] DCS detected (ESC P)");
-                        unsafe { DCS_LEN = 0; }
+                        unsafe {
+                            DCS_LEN = 0;
+                        }
                         state = State::DcsParam;
                     }
                     0x1b => {
@@ -193,7 +195,10 @@ fn print_str_ansi(s: &str) {
                         let buf = core::ptr::addr_of!(DCS_BUF) as *const u8;
                         core::slice::from_raw_parts(buf, len).to_vec()
                     };
-                    ostd::early_println!("[fb_console] ST received, dcs_len={}, rendering sixel", data.len());
+                    ostd::early_println!(
+                        "[fb_console] ST received, dcs_len={}, rendering sixel",
+                        data.len()
+                    );
                     render_sixel_inline(&data);
                     state = State::Normal;
                 } else if b == 0x1b {
@@ -213,7 +218,9 @@ fn print_str_ansi(s: &str) {
             }
             State::Csi => {
                 if b.is_ascii_digit() {
-                    param_buf = param_buf.saturating_mul(10).saturating_add((b - b'0') as u32);
+                    param_buf = param_buf
+                        .saturating_mul(10)
+                        .saturating_add((b - b'0') as u32);
                     has_param = true;
                     state = State::CsiParam;
                 } else if b == b'm' {
@@ -232,7 +239,9 @@ fn print_str_ansi(s: &str) {
             }
             State::CsiParam => {
                 if b.is_ascii_digit() {
-                    param_buf = param_buf.saturating_mul(10).saturating_add((b - b'0') as u32);
+                    param_buf = param_buf
+                        .saturating_mul(10)
+                        .saturating_add((b - b'0') as u32);
                     has_param = true;
                 } else if b == b';' {
                     // Multi-param SGR — we only apply the first param for fg color.
@@ -255,16 +264,16 @@ fn print_str_ansi(s: &str) {
 /// Apply a single SGR code to the current foreground color.
 fn apply_sgr(code: u32) {
     let color = match code {
-        0 => Some(FG_COLOR),        // Reset to default fg
-        30 => Some(ANSI_PALETTE[0]), // Black
-        31 => Some(ANSI_PALETTE[1]), // Red
-        32 => Some(ANSI_PALETTE[2]), // Green
-        33 => Some(ANSI_PALETTE[3]), // Yellow
-        34 => Some(ANSI_PALETTE[4]), // Blue
-        35 => Some(ANSI_PALETTE[5]), // Magenta
-        36 => Some(ANSI_PALETTE[6]), // Cyan
-        37 => Some(ANSI_PALETTE[7]), // White
-        39 => Some(FG_COLOR),        // Default fg
+        0 => Some(FG_COLOR),          // Reset to default fg
+        30 => Some(ANSI_PALETTE[0]),  // Black
+        31 => Some(ANSI_PALETTE[1]),  // Red
+        32 => Some(ANSI_PALETTE[2]),  // Green
+        33 => Some(ANSI_PALETTE[3]),  // Yellow
+        34 => Some(ANSI_PALETTE[4]),  // Blue
+        35 => Some(ANSI_PALETTE[5]),  // Magenta
+        36 => Some(ANSI_PALETTE[6]),  // Cyan
+        37 => Some(ANSI_PALETTE[7]),  // White
+        39 => Some(FG_COLOR),         // Default fg
         90 => Some(ANSI_PALETTE[8]),  // Bright Black
         91 => Some(ANSI_PALETTE[9]),  // Bright Red
         92 => Some(ANSI_PALETTE[10]), // Bright Green
@@ -273,7 +282,7 @@ fn apply_sgr(code: u32) {
         95 => Some(ANSI_PALETTE[13]), // Bright Magenta
         96 => Some(ANSI_PALETTE[14]), // Bright Cyan
         97 => Some(ANSI_PALETTE[15]), // Bright White
-        _ => None, // Unsupported SGR (bold, underline, etc.) — ignore
+        _ => None,                    // Unsupported SGR (bold, underline, etc.) — ignore
     };
     if let Some(c) = color {
         CURRENT_FG.store(c as usize, Ordering::Relaxed);
@@ -383,11 +392,7 @@ fn font8x8_glyph(c: u8) -> [u8; 8] {
     // Only 0x20..=0x7e are meaningful; everything else is blank.
     const FONT: [[u8; 8]; 96] = include!("fb_console_font.rs");
     let idx = (c as usize).wrapping_sub(0x20);
-    if idx < 96 {
-        FONT[idx]
-    } else {
-        [0; 8]
-    }
+    if idx < 96 { FONT[idx] } else { [0; 8] }
 }
 
 // ── Sixel inline image rendering ──────────────────────────────────────────
@@ -403,7 +408,12 @@ fn render_sixel_inline(dcs_data: &[u8]) {
             return;
         }
     };
-    ostd::early_println!("[fb_console] sixel decoded: {}x{}, first pixel={:#x}", width, height, pixels.get(0).copied().unwrap_or(0));
+    ostd::early_println!(
+        "[fb_console] sixel decoded: {}x{}, first pixel={:#x}",
+        width,
+        height,
+        pixels.get(0).copied().unwrap_or(0)
+    );
     if width == 0 || height == 0 {
         return;
     }
@@ -412,7 +422,13 @@ fn render_sixel_inline(dcs_data: &[u8]) {
         let stride = fb_w as usize;
         let col = CURSOR_COL.load(Ordering::Relaxed) * CHAR_W;
         let row = CURSOR_ROW.load(Ordering::Relaxed) * CHAR_H;
-        ostd::early_println!("[fb_console] rendering at ({},{}) fb={}x{}", col, row, fb_w, fb_h);
+        ostd::early_println!(
+            "[fb_console] rendering at ({},{}) fb={}x{}",
+            col,
+            row,
+            fb_w,
+            fb_h
+        );
 
         unsafe {
             let p = fb as *mut u32;
@@ -453,10 +469,9 @@ fn decode_sixel(data: &[u8]) -> Option<(usize, usize, Vec<u32>)> {
     // VT-330 default palette (16 colors)
     // Mutable palette: starts with VT-330 defaults, updated by #N;Co;R;G;B.
     let mut palette: Vec<u32> = vec![
-        0xFF000000, 0xFF3333CC, 0xFFCC3333, 0xFF33CC33,
-        0xFFCC33CC, 0xFF33CCCC, 0xFFCCCC33, 0xFFCCCCCC,
-        0xFF333333, 0xFF3333FF, 0xFFFF3333, 0xFF33FF33,
-        0xFFFF33FF, 0xFF33FFFF, 0xFFFFFF33, 0xFFFFFFFF,
+        0xFF000000, 0xFF3333CC, 0xFFCC3333, 0xFF33CC33, 0xFFCC33CC, 0xFF33CCCC, 0xFFCCCC33,
+        0xFFCCCCCC, 0xFF333333, 0xFF3333FF, 0xFFFF3333, 0xFF33FF33, 0xFFFF33FF, 0xFF33FFFF,
+        0xFFFFFF33, 0xFFFFFFFF,
     ];
     // Extend palette to 256 entries for safety.
     palette.resize(256, 0xFF000000);
@@ -498,7 +513,11 @@ fn decode_sixel(data: &[u8]) -> Option<(usize, usize, Vec<u32>)> {
             b'!' => {
                 // Repeat: !N<char>
                 let (params, consumed) = parse_sixel_params(&data[i + 1..]);
-                let count = if params.is_empty() { 1 } else { params[0] as usize };
+                let count = if params.is_empty() {
+                    1
+                } else {
+                    params[0] as usize
+                };
                 i += 1 + consumed;
                 if i < data.len() && (0x3f..=0x7e).contains(&data[i]) {
                     let bits = (data[i] - 0x3f) as u32;

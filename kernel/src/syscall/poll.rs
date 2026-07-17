@@ -117,9 +117,9 @@ pub(super) fn do_poll(
         // For None timeout (infinite), loop forever.
         // For finite timeouts, use a bounded loop.
         let max_iters = match timeout {
-            None => usize::MAX,  // infinite
-            Some(d) if d.is_zero() => 1,  // non-blocking: one check
-            Some(d) => (d.as_millis().max(1) * 100) as usize,  // ~10 checks per ms
+            None => usize::MAX,                               // infinite
+            Some(d) if d.is_zero() => 1,                      // non-blocking: one check
+            Some(d) => (d.as_millis().max(1) * 100) as usize, // ~10 checks per ms
         };
 
         for _ in 0..max_iters {

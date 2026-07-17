@@ -77,7 +77,8 @@ pub fn init_component_fn() -> Result<(), ComponentInitError> {
 
 #[derive(Debug)]
 pub struct Component {
-    pub console_device_table: SpinLock<BTreeMap<String, Arc<dyn AnyConsoleDevice>>, LocalIrqDisabled>,
+    pub console_device_table:
+        SpinLock<BTreeMap<String, Arc<dyn AnyConsoleDevice>>, LocalIrqDisabled>,
 }
 
 impl Component {

@@ -26,7 +26,12 @@ pub(super) fn probe_for_device() {
         let mmio_region = node.reg().unwrap().next().unwrap();
         let mmio_start = mmio_region.starting_address as usize;
         let mmio_end = mmio_start + mmio_region.size.unwrap();
-        ostd::early_println!("[virtio-mmio] node #{}: mmio {:#x}..{:#x}", found, mmio_start, mmio_end);
+        ostd::early_println!(
+            "[virtio-mmio] node #{}: mmio {:#x}..{:#x}",
+            found,
+            mmio_start,
+            mmio_end
+        );
 
         // Parse interrupt from FDT.
         // GIC uses 3-cell format: <type number flags>.

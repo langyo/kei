@@ -328,7 +328,9 @@ impl ConsoleState {
 
             // Write to the live framebuffer if output is enabled.
             if is_output_enabled {
-                self.backend.write_bytes_at(off, &self.bytes[off..off + row_bytes]).unwrap();
+                self.backend
+                    .write_bytes_at(off, &self.bytes[off..off + row_bytes])
+                    .unwrap();
             }
         }
 

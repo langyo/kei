@@ -27,7 +27,11 @@ impl MmioCommonDevice {
         // (0xffff800000000000 + paddr) already covers MMIO regions.
         // We rely on that mapping for all MMIO reads/writes.
         #[cfg(target_arch = "aarch64")]
-        ostd::early_println!("[virtio-mmio] MmioCommonDevice::new: paddr={:#x} irq={}", this.io_mem.paddr(), this.irq.num());
+        ostd::early_println!(
+            "[virtio-mmio] MmioCommonDevice::new: paddr={:#x} irq={}",
+            this.io_mem.paddr(),
+            this.irq.num()
+        );
 
         this
     }

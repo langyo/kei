@@ -36,11 +36,7 @@ pub(super) fn handle_exception(ctx: &Context, user_ctx: &UserContext, exception:
 fn handle_page_fault_from_vmar(vmar: &Vmar, page_fault_info: &PageFaultInfo) -> Result<(), ()> {
     if let Err(e) = vmar.handle_page_fault(page_fault_info) {
         #[cfg(target_arch = "aarch64")]
-        ostd::early_println!(
-            "[pf] failed: info={:#x?} err={:?}",
-            page_fault_info,
-            e
-        );
+        ostd::early_println!("[pf] failed: info={:#x?} err={:?}", page_fault_info, e);
         warn!(
             "page fault handler failed: info: {:#x?}, err: {:?}",
             page_fault_info, e

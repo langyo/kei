@@ -23,18 +23,16 @@ pub(crate) fn count_processors() -> Option<u32> {
 
     let mut count = 0u32;
     fdt.cpus().for_each(|cpu_node| {
-        if cpu_node.property("device_type").map_or(false, |p| p.as_str() == Some("cpu"))
+        if cpu_node
+            .property("device_type")
+            .map_or(false, |p| p.as_str() == Some("cpu"))
             && cpu_node.property("reg").is_some()
         {
             count += 1;
         }
     });
 
-    if count == 0 {
-        None
-    } else {
-        Some(count)
-    }
+    if count == 0 { None } else { Some(count) }
 }
 
 /// Brings up all application processors via PSCI `CPU_ON`.
@@ -50,11 +48,7 @@ pub(crate) fn count_processors() -> Option<u32> {
 ///  1. we're in the boot context of the BSP,
 ///  2. all APs have not yet been booted, and
 ///  3. the arguments are valid to boot APs.
-pub(crate) unsafe fn bringup_all_aps(
-    info_ptr: *const PerApRawInfo,
-    pt_ptr: Paddr,
-    num_cpus: u32,
-) {
+pub(crate) unsafe fn bringup_all_aps(info_ptr: *const PerApRawInfo, pt_ptr: Paddr, num_cpus: u32) {
     if num_cpus <= 1 {
         return;
     }
@@ -69,7 +63,8 @@ pub(crate) unsafe fn bringup_all_aps(
     let bsp_mpidr = read_mpidr_el1();
     crate::info!(
         "Bootstrapping CPU (mpidr={:#x}), booting {} APs",
-        bsp_mpidr, num_cpus - 1
+        bsp_mpidr,
+        num_cpus - 1
     );
 
     // Collect all non-BSP MPIDRs from the FDT.
@@ -84,7 +79,9 @@ pub(crate) unsafe fn bringup_all_aps(
 
         crate::info!(
             "Starting CPU {} (mpidr={:#x}, entry={:#x})",
-            cpu_id, mpidr, entry_paddr
+            cpu_id,
+            mpidr,
+            entry_paddr
         );
 
         // SAFETY: Each MPIDR is unique and the entry point is valid.
@@ -95,7 +92,9 @@ pub(crate) unsafe fn bringup_all_aps(
         } else {
             crate::error!(
                 "PSCI CPU_ON failed for CPU {} (mpidr={:#x}): code={}",
-                cpu_id, mpidr, result
+                cpu_id,
+                mpidr,
+                result
             );
         }
     }

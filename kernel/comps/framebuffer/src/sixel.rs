@@ -41,22 +41,86 @@ pub(crate) struct SixelImage {
 /// The default Sixel color palette (VT-330 16-color set).
 fn default_palette() -> [Pixel; 16] {
     [
-        Pixel { red: 0, green: 0, blue: 0 },       // 0: Black
-        Pixel { red: 51, green: 51, blue: 204 },   // 1: Blue
-        Pixel { red: 204, green: 51, blue: 51 },   // 2: Red
-        Pixel { red: 51, green: 204, blue: 51 },   // 3: Green
-        Pixel { red: 204, green: 51, blue: 204 },  // 4: Magenta
-        Pixel { red: 51, green: 204, blue: 204 },  // 5: Cyan
-        Pixel { red: 204, green: 204, blue: 51 },  // 6: Yellow
-        Pixel { red: 204, green: 204, blue: 204 }, // 7: White (50%)
-        Pixel { red: 51, green: 51, blue: 51 },    // 8: Gray (25%)
-        Pixel { red: 51, green: 51, blue: 255 },   // 9: Bright Blue
-        Pixel { red: 255, green: 51, blue: 51 },   // 10: Bright Red
-        Pixel { red: 51, green: 255, blue: 51 },   // 11: Bright Green
-        Pixel { red: 255, green: 51, blue: 255 },  // 12: Bright Magenta
-        Pixel { red: 51, green: 255, blue: 255 },  // 13: Bright Cyan
-        Pixel { red: 255, green: 255, blue: 51 },  // 14: Bright Yellow
-        Pixel { red: 255, green: 255, blue: 255 }, // 15: White (100%)
+        Pixel {
+            red: 0,
+            green: 0,
+            blue: 0,
+        }, // 0: Black
+        Pixel {
+            red: 51,
+            green: 51,
+            blue: 204,
+        }, // 1: Blue
+        Pixel {
+            red: 204,
+            green: 51,
+            blue: 51,
+        }, // 2: Red
+        Pixel {
+            red: 51,
+            green: 204,
+            blue: 51,
+        }, // 3: Green
+        Pixel {
+            red: 204,
+            green: 51,
+            blue: 204,
+        }, // 4: Magenta
+        Pixel {
+            red: 51,
+            green: 204,
+            blue: 204,
+        }, // 5: Cyan
+        Pixel {
+            red: 204,
+            green: 204,
+            blue: 51,
+        }, // 6: Yellow
+        Pixel {
+            red: 204,
+            green: 204,
+            blue: 204,
+        }, // 7: White (50%)
+        Pixel {
+            red: 51,
+            green: 51,
+            blue: 51,
+        }, // 8: Gray (25%)
+        Pixel {
+            red: 51,
+            green: 51,
+            blue: 255,
+        }, // 9: Bright Blue
+        Pixel {
+            red: 255,
+            green: 51,
+            blue: 51,
+        }, // 10: Bright Red
+        Pixel {
+            red: 51,
+            green: 255,
+            blue: 51,
+        }, // 11: Bright Green
+        Pixel {
+            red: 255,
+            green: 51,
+            blue: 255,
+        }, // 12: Bright Magenta
+        Pixel {
+            red: 51,
+            green: 255,
+            blue: 255,
+        }, // 13: Bright Cyan
+        Pixel {
+            red: 255,
+            green: 255,
+            blue: 51,
+        }, // 14: Bright Yellow
+        Pixel {
+            red: 255,
+            green: 255,
+            blue: 255,
+        }, // 15: White (100%)
     ]
 }
 
@@ -125,7 +189,11 @@ pub(crate) fn decode(dcs_data: &[u8]) -> Option<SixelImage> {
             // Repeat: !N<char>
             b'!' => {
                 let (params, consumed) = parse_params(&dcs_data[i + 1..]);
-                let count = if params.is_empty() { 1 } else { params[0] as usize };
+                let count = if params.is_empty() {
+                    1
+                } else {
+                    params[0] as usize
+                };
                 i += 1 + consumed;
 
                 // The next byte should be a sixel data char.
@@ -136,10 +204,22 @@ pub(crate) fn decode(dcs_data: &[u8]) -> Option<SixelImage> {
                         let pixel = palette[(current_color as usize) % 16];
 
                         for _ in 0..count {
-                            ensure_grid_size(&mut grid_pixels, &mut grid_width, &mut grid_height,
-                                             cur_x + 1, (cur_sixel_y + 1) * 6);
-                            write_sixel_column(&mut grid_pixels, grid_width, grid_height,
-                                                cur_x, cur_sixel_y, bits, pixel);
+                            ensure_grid_size(
+                                &mut grid_pixels,
+                                &mut grid_width,
+                                &mut grid_height,
+                                cur_x + 1,
+                                (cur_sixel_y + 1) * 6,
+                            );
+                            write_sixel_column(
+                                &mut grid_pixels,
+                                grid_width,
+                                grid_height,
+                                cur_x,
+                                cur_sixel_y,
+                                bits,
+                                pixel,
+                            );
                             cur_x += 1;
                         }
                     }
@@ -165,10 +245,22 @@ pub(crate) fn decode(dcs_data: &[u8]) -> Option<SixelImage> {
                 let bits = (c - 0x3f) as u32;
                 let pixel = palette[(current_color as usize) % 16];
 
-                ensure_grid_size(&mut grid_pixels, &mut grid_width, &mut grid_height,
-                                 cur_x + 1, (cur_sixel_y + 1) * 6);
-                write_sixel_column(&mut grid_pixels, grid_width, grid_height,
-                                   cur_x, cur_sixel_y, bits, pixel);
+                ensure_grid_size(
+                    &mut grid_pixels,
+                    &mut grid_width,
+                    &mut grid_height,
+                    cur_x + 1,
+                    (cur_sixel_y + 1) * 6,
+                );
+                write_sixel_column(
+                    &mut grid_pixels,
+                    grid_width,
+                    grid_height,
+                    cur_x,
+                    cur_sixel_y,
+                    bits,
+                    pixel,
+                );
                 cur_x += 1;
                 i += 1;
             }
@@ -197,7 +289,11 @@ pub(crate) fn decode(dcs_data: &[u8]) -> Option<SixelImage> {
             if y < grid_height && x < grid_width {
                 flat_pixels.push(grid_pixels[y][x]);
             } else {
-                flat_pixels.push(Pixel { red: 0, green: 0, blue: 0 });
+                flat_pixels.push(Pixel {
+                    red: 0,
+                    green: 0,
+                    blue: 0,
+                });
             }
         }
     }
@@ -220,7 +316,14 @@ fn ensure_grid_size(
 ) {
     if need_w > *grid_width {
         for row in grid.iter_mut() {
-            row.resize(need_w, Pixel { red: 0, green: 0, blue: 0 });
+            row.resize(
+                need_w,
+                Pixel {
+                    red: 0,
+                    green: 0,
+                    blue: 0,
+                },
+            );
         }
         *grid_width = need_w;
     }

@@ -120,7 +120,10 @@ impl<D, E: Ext> EtherIface<D, E> {
     ) -> Result<IpPacket<'pkt>, Option<ArpRepr>> {
         // Parse the Ethernet header. Ignore the packet if the header is ill-formed.
         let frame = EthernetFrame::new_checked(data).map_err(|_| {
-            ostd::early_println!("[ether] EthernetFrame::new_checked FAILED, len={}", data.len());
+            ostd::early_println!(
+                "[ether] EthernetFrame::new_checked FAILED, len={}",
+                data.len()
+            );
             None
         })?;
         let repr = EthernetRepr::parse(&frame).map_err(|_| {

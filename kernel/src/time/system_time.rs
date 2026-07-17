@@ -27,8 +27,7 @@ pub(super) fn init() {
 /// (Unix epoch + some fixed offset) so SystemTime::now() doesn't panic.
 pub fn init_no_rtc() {
     let start_time = SystemTime::UNIX_EPOCH;
-    START_TIME_AS_DURATION
-        .call_once(|| Duration::ZERO);
+    START_TIME_AS_DURATION.call_once(|| Duration::ZERO);
     START_TIME.call_once(|| start_time);
 }
 

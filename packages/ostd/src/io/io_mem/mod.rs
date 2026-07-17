@@ -126,7 +126,6 @@ impl<SecuritySensitivity> IoMem<SecuritySensitivity> {
             priv_flags,
         };
 
-
         #[cfg(target_arch = "aarch64")]
         {
             const DEVICE_LINEAR_BASE: usize = 0xffff_8000_0000_0000;

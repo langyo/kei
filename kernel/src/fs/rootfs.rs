@@ -17,9 +17,9 @@ use crate::{fs::vfs::inode::MknodType, prelude::*};
 
 /// Unpack and prepare the rootfs from the initramfs CPIO buffer.
 pub fn init_in_first_kthread(path_resolver: &PathResolver) -> Result<()> {
-    let initramfs_buf = boot_info().initramfs.ok_or_else(|| {
-        Error::with_message(Errno::EINVAL, "no initramfs found")
-    });
+    let initramfs_buf = boot_info()
+        .initramfs
+        .ok_or_else(|| Error::with_message(Errno::EINVAL, "no initramfs found"));
 
     // On aarch64, QEMU `-kernel <ELF>` does not load the `-initrd` file into
     // guest RAM nor write the linux,initrd-start/end properties to the FDT
@@ -37,7 +37,10 @@ pub fn init_in_first_kthread(path_resolver: &PathResolver) -> Result<()> {
     #[cfg(not(target_arch = "aarch64"))]
     let initramfs_buf: &[u8] = initramfs_buf?;
 
-    ostd::early_println!("[rootfs] initramfs buf size = {} bytes", initramfs_buf.len());
+    ostd::early_println!(
+        "[rootfs] initramfs buf size = {} bytes",
+        initramfs_buf.len()
+    );
 
     let (reader, suffix) = match &initramfs_buf[..4] {
         // Gzip magic number: 0x1F 0x8B
@@ -61,11 +64,7 @@ pub fn init_in_first_kthread(path_resolver: &PathResolver) -> Result<()> {
         let mut entry = entry_result?;
         entry_count += 1;
         if let Err(e) = try_append_entry_to_rootfs(&mut entry, path_resolver) {
-            ostd::early_println!(
-                "[rootfs] failed to add entry {}: {:?}",
-                entry.name(),
-                e
-            );
+            ostd::early_println!("[rootfs] failed to add entry {}: {:?}", entry.name(), e);
         }
     }
 

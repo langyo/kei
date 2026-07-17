@@ -91,8 +91,7 @@ fn init() -> Result<(), ComponentInitError> {
 /// the kernel command line and set INIT_PROC_ARGS, so spawn_init_process can
 /// read it.
 pub fn init_no_component() {
-    INIT_PROC_ARGS
-        .call_once(|| dispatch_params(ostd::boot::boot_info().kernel_cmdline.as_str()));
+    INIT_PROC_ARGS.call_once(|| dispatch_params(ostd::boot::boot_info().kernel_cmdline.as_str()));
 }
 
 // Splits the command line string by spaces but preserve

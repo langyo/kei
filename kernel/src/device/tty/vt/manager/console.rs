@@ -298,7 +298,9 @@ impl VtConsole {
         } else if matches!(*backend, VtConsoleBackend::Framebuffer(_)) {
             ostd::early_println!("[VT] already has framebuffer backend");
         } else {
-            ostd::early_println!("[VT] WARNING: framebuffer::get() returned None, backend stays None");
+            ostd::early_println!(
+                "[VT] WARNING: framebuffer::get() returned None, backend stays None"
+            );
         }
         self.is_allocated.store(true, Ordering::Relaxed);
     }

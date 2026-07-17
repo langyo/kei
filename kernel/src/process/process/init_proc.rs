@@ -35,9 +35,9 @@ pub fn spawn_init_process(
     // RAYON_NUM_THREADS=1 makes rayon run on the calling thread, avoiding
     // the need for worker threads. Only inject if not already set.
     const RAYON_VAR: &str = "RAYON_NUM_THREADS=1";
-    let has_rayon = envp.iter().any(|e| {
-        e.to_string_lossy().starts_with("RAYON_NUM_THREADS")
-    });
+    let has_rayon = envp
+        .iter()
+        .any(|e| e.to_string_lossy().starts_with("RAYON_NUM_THREADS"));
     if !has_rayon {
         envp.push(CString::new(RAYON_VAR).unwrap());
     }

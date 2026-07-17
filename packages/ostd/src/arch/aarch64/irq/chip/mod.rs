@@ -412,7 +412,10 @@ pub(crate) unsafe fn init_on_bsp(_io_mem_builder: &IoMemAllocatorBuilder) {
         // Set SPI priorities.
         let num_spis = num_spi_groups * 32;
         for i in (0..num_spis).step_by(4) {
-            core::ptr::write_volatile((gicd_va + 0x0400 + 32 + i) as *mut u32, GIC_PRIORITY_STRIDE4);
+            core::ptr::write_volatile(
+                (gicd_va + 0x0400 + 32 + i) as *mut u32,
+                GIC_PRIORITY_STRIDE4,
+            );
         }
     }
 

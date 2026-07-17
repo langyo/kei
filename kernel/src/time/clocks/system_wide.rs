@@ -324,14 +324,15 @@ pub fn init_for_ktest() {
 
 /// Initializes the system-wide clocks without an RTC.
 ///
-/// On aarch64 the aster_time component (RTC + TSC clocksource) isn't wired up
-/// (the inventory-based component system is bypassed), so the normal
-/// `init()` path panics reading the uninitialized start time. This function
-/// sets all the clock singletons to default values (epoch / zero duration),
-/// mirroring `init_for_ktest`, so that later `singleton().unwrap()` calls in
-/// the process/VFS paths don't panic. The clocks will report a fixed time,
-/// which is acceptable until RTC support is added.
-#[cfg(target_arch = "aarch64")]
+/// On aarch64 and riscv64 the aster_time component (RTC + TSC clocksource)
+/// isn't wired up (the inventory-based component system is bypassed), so the
+/// normal `init()` path panics reading the uninitialized start time. This
+/// function sets all the clock singletons to default values (epoch / zero
+/// duration), mirroring `init_for_ktest`, so that later
+/// `singleton().unwrap()` calls in the process/VFS paths don't panic. The
+/// clocks will report a fixed time, which is acceptable until RTC support is
+/// added.
+#[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
 pub fn init_no_rtc() {
     // Set the per-clock singletons (CLOCK_REALTIME_INSTANCE,
     // CLOCK_MONOTONIC_INSTANCE, CLOCK_BOOTTIME_INSTANCE) using the macro-

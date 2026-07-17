@@ -239,8 +239,10 @@ fn first_kthread() {
     init_in_first_kthread(&fs_resolver);
 
     // print_banner uses println! which routes through the log/console system;
-    // on aarch64 the console component isn't initialized yet, so skip it.
-    #[cfg(not(target_arch = "aarch64"))]
+    // on aarch64/riscv64 the console component isn't initialized yet (and the
+    // gradient logo art risks hitting the riscv64 unicode table bug), so skip
+    // it there.
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     print_banner();
 
     INIT_PROCESS.call_once(|| {
@@ -278,7 +280,10 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
     // Work queue should be initialized before interrupt is enabled,
     // in case any irq handler uses work queue as bottom half
     crate::thread::work_queue::init_in_first_kthread();
-    #[cfg(not(target_arch = "aarch64"))]
+    // riscv64 mirrors aarch64 here: the mem char devices were already
+    // registered in init(), and the rest of device init depends on driver
+    // components that the qemu-direct path skips.
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     crate::device::init_in_first_kthread();
     // On aarch64, net::init() is deferred to here (after the component system's
     // Kthread stage). However, inventory-based component registration is
@@ -327,11 +332,23 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
         crate::net::init();
     }
     ostd::early_println!("[kthread] before net::init_in_first_kthread");
+    // riscv64 skips the network stack on this boot path: net::init() is not
+    // called (no virtio-net device without driver components), so
+    // init_in_first_kthread would panic on the uninitialized IFACES Once.
+    #[cfg(not(target_arch = "riscv64"))]
     crate::net::init_in_first_kthread();
-    ostd::early_println!("[kthread] after net::init_in_first_kthread, before fs::init_in_first_kthread");
+    #[cfg(target_arch = "riscv64")]
+    ostd::early_println!("[kthread] net stack skipped on riscv64 (no net devices)");
+    ostd::early_println!(
+        "[kthread] after net::init_in_first_kthread, before fs::init_in_first_kthread"
+    );
     crate::fs::init_in_first_kthread(path_resolver);
     ostd::early_println!("[kthread] after fs::init_in_first_kthread (rootfs ready)");
-    #[cfg(any(target_arch = "x86_64", target_arch = "riscv64"))]
+    // vDSO init needs the aster_time TSC clocksource, which is x86-only on
+    // this boot path (the aster_time component is bypassed elsewhere). The
+    // ELF loader maps the vDSO only when it is initialized, so skipping it on
+    // riscv64 is safe.
+    #[cfg(target_arch = "x86_64")]
     crate::vdso::init_in_first_kthread();
 }
 
@@ -361,7 +378,8 @@ fn print_sixel_test_image() {
     // Simplified: draw 3 colored blocks side by side in one sixel row.
     // Each block = select color + 8 data chars of '~' (0x7e = all 6 bits set).
     // Use byte array to avoid Rust line-continuation whitespace issues.
-    let sixel_bytes: &[u8] = b"\x1bPq#1;2;100;0;0#1~~~~~~~~#2;2;0;100;0#2~~~~~~~~#3;2;0;0;100#3~~~~~~~~\x1b\\";
+    let sixel_bytes: &[u8] =
+        b"\x1bPq#1;2;100;0;0#1~~~~~~~~#2;2;0;100;0#2~~~~~~~~#3;2;0;0;100#3~~~~~~~~\x1b\\";
     ostd::info!("sending {} bytes to fb_console", sixel_bytes.len());
 
     // Send the Sixel sequence directly through the boot console (fb_console),
@@ -373,11 +391,11 @@ fn print_sixel_test_image() {
 }
 
 pub(super) fn on_first_process_startup(ctx: &Context) {
-    // The inventory-based component system panics on aarch64 (boot page table
-    // doesn't activate the cursor-built kernel page table). Skip the Process
-    // stage of component init and device init there — they depend on the
-    // component/driver registration that aarch64 bypasses manually.
-    #[cfg(not(target_arch = "aarch64"))]
+    // The inventory-based component system panics on aarch64/riscv64 (the
+    // qemu-direct boot path bypasses component registration). Skip the
+    // Process stage of component init and device init there — they depend on
+    // the component/driver registration that these arches bypass manually.
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     {
         component::init_all(InitStage::Process, component::parse_metadata!()).unwrap();
         crate::device::init_in_first_process(ctx).unwrap();
@@ -433,11 +451,11 @@ pub(super) fn on_first_process_startup(ctx: &Context) {
         // is still valid.)
     }
     // fs::init_in_first_process opens /dev/console as fd 0/1/2, which needs a
-    // registered console device driver. On aarch64 the console component isn't
-    // initialized, so opening /dev/console fails (ENODEV). Skip it; the init
-    // process will run without std fds (open_initial_console below also tries
-    // and silently skips if it can't find a console).
-    #[cfg(not(target_arch = "aarch64"))]
+    // registered console device driver. On aarch64/riscv64 the console
+    // component isn't initialized, so opening /dev/console fails (ENODEV).
+    // Skip it; the init process will run without std fds (open_initial_console
+    // below binds a SerialConsole instead).
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     crate::fs::init_in_first_process(ctx);
 
     // Open /dev/console as fd 0 (stdin), 1 (stdout), 2 (stderr) for the init
@@ -458,58 +476,60 @@ fn open_initial_console(ctx: &Context) {
         vfs::path::FsPath,
     };
 
-    // On aarch64, use SerialConsole for all fds so piped/serial input works.
-    // VT framebuffer still renders independently via FramebufferConsole.
-    #[cfg(target_arch = "aarch64")]
+    // On aarch64/riscv64, use SerialConsole for all fds so piped/serial input
+    // works. (aarch64: PL011; riscv64: SBI console.) The VT framebuffer still
+    // renders independently via FramebufferConsole on aarch64.
+    #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
     {
-        let console: Arc<dyn FileLike> =
-            Arc::new(crate::serial_console::SerialConsole::new(AccessMode::O_RDWR));
+        let console: Arc<dyn FileLike> = Arc::new(crate::serial_console::SerialConsole::new(
+            AccessMode::O_RDWR,
+        ));
         let file_table = ctx.thread_local.borrow_file_table();
         let mut ft = file_table.unwrap().write();
         let _ = ft.insert(console.clone(), FdFlags::empty()); // fd 0 = stdin
         let _ = ft.insert(console.clone(), FdFlags::empty()); // fd 1 = stdout
         let _ = ft.insert(console.clone(), FdFlags::empty()); // fd 2 = stderr
-        ostd::info!("serial console bound to fd 0/1/2");
+        ostd::early_println!("[kthread] serial console bound to fd 0/1/2");
         return;
     }
 
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "riscv64")))]
     {
-    // Try /dev/console first (or /dev/tty0). On aarch64, if the TTY/VT
-    // subsystem initialized successfully, /dev/console will be the VT
-    // framebuffer terminal — giving us keyboard input + ANSI display.
-    let console_paths = ["/dev/console", "/dev/tty0", "/dev/ttyS0"];
-    let fs_info = ctx.thread_local.borrow_fs();
-    let resolver = fs_info.resolver();
-    let resolver_guard = resolver.read();
+        // Try /dev/console first (or /dev/tty0). On aarch64, if the TTY/VT
+        // subsystem initialized successfully, /dev/console will be the VT
+        // framebuffer terminal — giving us keyboard input + ANSI display.
+        let console_paths = ["/dev/console", "/dev/tty0", "/dev/ttyS0"];
+        let fs_info = ctx.thread_local.borrow_fs();
+        let resolver = fs_info.resolver();
+        let resolver_guard = resolver.read();
 
-    let path = console_paths.iter().find_map(|p| {
-        FsPath::try_from(*p)
-            .ok()
-            .and_then(|fp| resolver_guard.lookup(&fp).ok().map(|path| (*p, path)))
-    });
-    drop(resolver_guard);
+        let path = console_paths.iter().find_map(|p| {
+            FsPath::try_from(*p)
+                .ok()
+                .and_then(|fp| resolver_guard.lookup(&fp).ok().map(|path| (*p, path)))
+        });
+        drop(resolver_guard);
 
-    let file: Arc<dyn FileLike> = if let Some((found, path)) = path {
-        match InodeHandle::new(path, AccessMode::O_RDWR, StatusFlags::empty()) {
-            Ok(f) => {
-                ostd::info!("console opened: {}", found);
-                Arc::new(f)
+        let file: Arc<dyn FileLike> = if let Some((found, path)) = path {
+            match InodeHandle::new(path, AccessMode::O_RDWR, StatusFlags::empty()) {
+                Ok(f) => {
+                    ostd::info!("console opened: {}", found);
+                    Arc::new(f)
+                }
+                Err(e) => {
+                    ostd::info!("console open failed: {:?}, falling back", e);
+                    return;
+                }
             }
-            Err(e) => {
-                ostd::info!("console open failed: {:?}, falling back", e);
-                return;
-            }
-        }
-    } else {
-        return;
-    };
+        } else {
+            return;
+        };
 
-    let file_table = ctx.thread_local.borrow_file_table();
-    let mut ft = file_table.unwrap().write();
-    let _ = ft.insert(file.clone(), FdFlags::empty()); // fd 0 = stdin
-    let _ = ft.insert(file.clone(), FdFlags::empty()); // fd 1 = stdout
-    let _ = ft.insert(file.clone(), FdFlags::empty()); // fd 2 = stderr
+        let file_table = ctx.thread_local.borrow_file_table();
+        let mut ft = file_table.unwrap().write();
+        let _ = ft.insert(file.clone(), FdFlags::empty()); // fd 0 = stdin
+        let _ = ft.insert(file.clone(), FdFlags::empty()); // fd 1 = stdout
+        let _ = ft.insert(file.clone(), FdFlags::empty()); // fd 2 = stderr
     } // end #[cfg(not(target_arch = "aarch64"))]
 }
 

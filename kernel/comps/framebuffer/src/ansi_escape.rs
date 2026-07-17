@@ -83,7 +83,10 @@ enum WaitFor {
     Osc { len: u8, is_last_esc: bool },
     /// Accumulates a DCS (Device Control String) payload, terminated by ST ("ESC\").
     /// Used for Sixel image data (DCS q ... ST).
-    Dcs { is_last_esc: bool, saw_command_q: bool },
+    Dcs {
+        is_last_esc: bool,
+        saw_command_q: bool,
+    },
 }
 
 /// Foreground and background colors.
@@ -260,8 +263,7 @@ impl EscapeFsm {
                 // Detect the 'q' Sixel command byte (first non-parameter byte).
                 // DCS format: ESC P <params> q <data> ESC \
                 // The <params> are digits/semicolons before the command byte.
-                let new_saw_q = saw_command_q
-                    || (byte == b'q' && !is_last_esc);
+                let new_saw_q = saw_command_q || (byte == b'q' && !is_last_esc);
 
                 // If we've seen 'q', accumulate data bytes. Otherwise, these are
                 // DCS parameters (digits/semicolons) that we skip.

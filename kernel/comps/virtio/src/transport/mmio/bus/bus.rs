@@ -45,27 +45,27 @@ impl MmioBus {
         // activated (commit dfd7324) and IoMem works, we probe normally so that
         // virtio-net, virtio-keyboard, etc. are discovered and registered.
         {
-        debug!("Register driver: {:#x?}", driver);
-        let length = self.common_devices.len();
-        for _ in (0..length).rev() {
-            let common_device = self.common_devices.pop_front().unwrap();
-            let device_id = common_device.read_device_id().unwrap();
-            let device = match driver.probe(common_device) {
-                Ok(device) => {
-                    debug_assert!(device_id == device.device_id());
-                    self.devices.push(device);
-                    continue;
-                }
-                Err((err, device)) => {
-                    if err != BusProbeError::DeviceNotMatch {
-                        error!("MMIO device construction failed, reason: {:?}", err);
+            debug!("Register driver: {:#x?}", driver);
+            let length = self.common_devices.len();
+            for _ in (0..length).rev() {
+                let common_device = self.common_devices.pop_front().unwrap();
+                let device_id = common_device.read_device_id().unwrap();
+                let device = match driver.probe(common_device) {
+                    Ok(device) => {
+                        debug_assert!(device_id == device.device_id());
+                        self.devices.push(device);
+                        continue;
                     }
-                    device
-                }
-            };
-            self.common_devices.push_back(device);
-        }
-        self.drivers.push(driver);
+                    Err((err, device)) => {
+                        if err != BusProbeError::DeviceNotMatch {
+                            error!("MMIO device construction failed, reason: {:?}", err);
+                        }
+                        device
+                    }
+                };
+                self.common_devices.push_back(device);
+            }
+            self.drivers.push(driver);
         }
     }
 
@@ -74,23 +74,23 @@ impl MmioBus {
         // boot page table MMIO faults. Now that the kernel page table is active,
         // we register normally so drivers can probe the device.
         {
-        let device_id = mmio_device.read_device_id().unwrap();
-        for driver in self.drivers.iter() {
-            mmio_device = match driver.probe(mmio_device) {
-                Ok(device) => {
-                    debug_assert!(device_id == device.device_id());
-                    self.devices.push(device);
-                    return;
-                }
-                Err((err, common_device)) => {
-                    if err != BusProbeError::DeviceNotMatch {
-                        error!("MMIO device construction failed, reason: {:?}", err);
+            let device_id = mmio_device.read_device_id().unwrap();
+            for driver in self.drivers.iter() {
+                mmio_device = match driver.probe(mmio_device) {
+                    Ok(device) => {
+                        debug_assert!(device_id == device.device_id());
+                        self.devices.push(device);
+                        return;
                     }
-                    common_device
-                }
-            };
-        }
-        self.common_devices.push_back(mmio_device);
+                    Err((err, common_device)) => {
+                        if err != BusProbeError::DeviceNotMatch {
+                            error!("MMIO device construction failed, reason: {:?}", err);
+                        }
+                        common_device
+                    }
+                };
+            }
+            self.common_devices.push_back(mmio_device);
         }
     }
 
