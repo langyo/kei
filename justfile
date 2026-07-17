@@ -23,9 +23,11 @@ set dotenv-load := true
 # Used by build-aris / build-desktop recipes and the initramfs scripts.
 ARIS_REPO := env_var_or_default("ARIS_REPO", "../aris")
 
-# Shared celestia-devtools recipes — NOT in git. This justfile references shared
-# variables, so the import is REQUIRED. Bootstrap once: celestia-devtools init
-# (or `just fetch` if already staged). Refresh after upgrades.
+# Shared celestia-devtools recipes — NOT in git. The imports are optional
+# (`import?`) so the justfile still loads before staging, but any recipe that
+# references shared variables (e.g. {{python_cmd}}) or devtools recipes needs
+# the staged import. Bootstrap once: celestia-devtools init (or `just fetch`
+# if already staged). Refresh after upgrades.
 import? "./.just/git-bash-interop.just"
 import? "./.just/celestia-devtools.just"
 

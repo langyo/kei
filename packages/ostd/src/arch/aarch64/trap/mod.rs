@@ -332,7 +332,7 @@ fn handle_user_page_fault(f: &mut TrapFrame, exception: &CpuException) {
         core::arch::asm!("mrs {0}, tpidr_el0", out(reg) tpidr);
         core::arch::asm!("mrs {0}, sp_el0", out(reg) sp_el0);
     }
-    crate::early_println!("[trap]   tpidr_el0={:#x} sp_el0={:#x}", tpidr, sp_el0,);
+    crate::early_println!("[trap]   tpidr_el0={:#x} sp_el0={:#x}", tpidr, sp_el0);
 
     // Walk the user stack frames (x29 = frame pointer chain) to get a backtrace.
     let mut fp = f.general.x29;
