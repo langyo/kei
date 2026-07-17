@@ -25,3 +25,6 @@ ostd-macros = { path = "packages/ostd/libs/ostd-macros" }
 ostd-test = { path = "packages/ostd/libs/ostd-test" }
 osdk-frame-allocator = { path = "packages/osdk/deps/frame-allocator" }
 osdk-heap-allocator = { path = "packages/osdk/deps/heap-allocator" }
+# See the matching entry in the root Cargo.toml: x86_64 0.15.5 requires a
+# newer nightly than the pinned one, so pin to the v0.15.4 tag.
+x86_64 = { git = "https://github.com/rust-osdev/x86_64", rev = "e18cb35fb5" }

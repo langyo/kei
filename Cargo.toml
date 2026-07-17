@@ -299,3 +299,10 @@ ostd = { path = "packages/ostd" }
 ostd-pod = { path = "packages/ostd/libs/ostd-pod" }
 ostd-macros = { path = "packages/ostd/libs/ostd-macros" }
 ostd-test = { path = "packages/ostd/libs/ostd-test" }
+# x86_64 0.15.5 (the latest crates.io release) implements
+# `Step::forward_overflowing`/`backward_overflowing`, which only exist in
+# `core::iter::Step` on nightly >= 2026-07-10. The pinned toolchain
+# (nightly-2026-05-01) does not have them, so the crate fails with E0407.
+# Pin to the v0.15.4 tag (e18cb35fb5), the last release before those impls
+# were added.
+x86_64 = { git = "https://github.com/rust-osdev/x86_64", rev = "e18cb35fb5" }
