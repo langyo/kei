@@ -143,8 +143,8 @@ ssh-info:
 #   just build                    # default board (NanoPi R3S)
 #   just build board <BOARD>      # specific board
 #   just build kernel <ARCH>      # kei kernel only (aarch64|x86_64|riscv64)
-#   just build browser <ARCH>     # aris-render browser engine (musl cross)
-#   just build desktop <ARCH>     # full stack: kernel + browser + initramfs
+#   just build vtty <ARCH>        # aris-render kei_tty vtty console (musl cross)
+#   just build desktop <ARCH>     # full stack: kernel + vtty + initramfs
 
 # Build dispatcher: just build <object> [args...]
 build WHAT="default" ARG1="":
@@ -152,13 +152,14 @@ build WHAT="default" ARG1="":
         default)  just _build-default ;; \
         board)    just _build-board "{{ARG1}}" ;; \
         kernel)   just build-arch "{{ARG1}}" ;; \
+        vtty)     just _build-browser "{{ARG1}}" ;; \
         browser)  just _build-browser "{{ARG1}}" ;; \
         desktop)  just _build-desktop "{{ARG1}}" ;; \
-        *) echo "Usage: just build [board|kernel|browser|desktop] [arg]"; \
+        *) echo "Usage: just build [board|kernel|vtty|browser|desktop] [arg]"; \
            echo "  just build              # default board (NanoPi R3S)"; \
            echo "  just build board <name> # specific board"; \
            echo "  just build kernel <arch>  # aarch64|x86_64|riscv64"; \
-           echo "  just build browser <arch> # aris-render musl binary"; \
+           echo "  just build vtty <arch>    # aris-render kei_tty console (musl cross)"; \
            echo "  just build desktop <arch> # full stack"; exit 1 ;; \
     esac
 
@@ -180,21 +181,25 @@ _build-board BOARD:
 dev ARCH="":
     just run {{ARCH}}
 
-# Run kei with aris-rendered UI filling the entire screen.
-# Usage: just render             # aarch64 QEMU + aris-rendered desktop
+# Run kei with the aris-rendered vtty console filling the entire screen
+# (Linux-kernel-console-style status screen served by kei_tty).
+# Usage: just render             # aarch64 QEMU + aris-rendered vtty
 [script('bash')]
 render ARCH="aarch64":
     RENDER_UI=1 just _run-aarch64 0
 
-# ── aris cross-compilation (browser engine) ─────────────────
+# ── aris cross-compilation (vtty console) ─────────────────
 #
 # Internal recipes invoked by `just build browser` / `just build desktop`.
 # aris must be checked out at $ARIS_REPO (see .env / .env.example).
 # The build runs inside WSL because Windows has no musl cross-toolchain;
 # aris's .cargo/config.toml uses rust-lld self-contained linking.
 
-# Compile the aris-render browser engine (kei_desktop) for the target arch.
-# Invoked via: just build browser <ARCH>
+# Compile the aris-render vtty console (kei_tty) for the target arch.
+# kei is vtty-only during the gateway-mode transition (no GUI): kei_tty
+# blits a host-pre-rendered Linux-kernel-console-style frame to /dev/fb0
+# and serves the WS JSON-RPC gateway on :8423.
+# Invoked via: just build vtty <ARCH>   (alias: just build browser <ARCH>)
 [script('bash')]
 _build-browser ARCH="aarch64":
     set -e
@@ -210,30 +215,32 @@ _build-browser ARCH="aarch64":
     # Resolve ARIS to an absolute path, then convert to a WSL /mnt/... path
     # so cargo inside Ubuntu-24.04 can find the source tree.
     ARIS_ABS=$(cd "$ARIS" 2>/dev/null && pwd || echo "$ARIS")
-    echo "[build browser] ARIS_REPO=$ARIS_ABS  triple=$TRIPLE"
+    echo "[build vtty] ARIS_REPO=$ARIS_ABS  triple=$TRIPLE"
 
     # Windows path → WSL path (D:\foo\bar → /mnt/d/foo/bar)
     WSL_ARIS=$(echo "$ARIS_ABS" | sed 's|\\|/|g' | sed -E 's|^([A-Za-z]):|/mnt/\L\1|')
 
     wsl -d Ubuntu-24.04 -- bash -lc \
-        'cd "$1" && source ~/.cargo/env 2>/dev/null && RUSTUP_TOOLCHAIN=nightly-2026-05-01 cargo build --release --target "$2" -p aris-render --no-default-features --features "render fbdev" --bin kei_desktop' \
+        'cd "$1" && source ~/.cargo/env 2>/dev/null && RUSTUP_TOOLCHAIN=nightly-2026-05-01 cargo build --release --target "$2" -p aris-render --no-default-features --features png --bin kei_tty' \
         bash "$WSL_ARIS" "$TRIPLE" 2>&1 | tail -15
 
-    echo "[build browser] done: $ARIS_ABS/target/$TRIPLE/release/kei_desktop"
+    echo "[build vtty] done: $ARIS_ABS/target/$TRIPLE/release/kei_tty"
 
-# Full desktop stack: kernel + browser + initramfs.
+# Full vtty stack: kernel + kei_tty console + initramfs.
+# (kei is vtty-only during the gateway-mode transition — the aris-rendered
+# GUI desktop chain is retired.)
 # Invoked via: just build desktop <ARCH>
 [script('bash')]
 _build-desktop ARCH="aarch64":
     set -e
     ARCH="{{ARCH}}"
-    echo "═══════ build desktop: $ARCH ═══════"
+    echo "═══════ build vtty stack: $ARCH ═══════"
     echo "[1/3] Building kei kernel..."
     just build-arch "$ARCH"
-    echo "[2/3] Building aris-render browser..."
+    echo "[2/3] Building aris-render kei_tty console..."
     just _build-browser "$ARCH"
     echo "[3/3] Packaging initramfs..."
-    ARIS_REPO="{{ARIS_REPO}}" {{python_cmd}} scripts/build_desktop_initramfs.py "$ARCH"
+    ARIS_REPO="{{ARIS_REPO}}" {{python_cmd}} scripts/build_render_initramfs.py kei_tty
     echo "═══════ done: just render $ARCH ═══════"
 
 # Build only (no QEMU launch).
@@ -410,10 +417,10 @@ _run-aarch64 HEADLESS:
 
     # Convert paths for Windows QEMU
     WINIMAGE=$(cygpath -w "target/osdk/aster-kernel/aster-kernel-osdk-bin.image" 2>/dev/null || echo "target/osdk/aster-kernel/aster-kernel-osdk-bin.image")
-    # Use the aris-rendered UI initramfs if RENDER_UI=1, else the SSH/shell initramfs.
+    # Use the aris-rendered vtty initramfs if RENDER_UI=1, else the SSH/shell initramfs.
     if [ "$RENDER_UI" = "1" ]; then
-        INITRAMFS_PATH="tests/initramfs/build/initramfs_render_new.cpio.gz"
-        echo "[run] Using aris-rendered UI initramfs"
+        INITRAMFS_PATH="tests/initramfs/build/initramfs_kei_tty.cpio.gz"
+        echo "[run] Using aris-rendered vtty (kei_tty) initramfs"
     else
         INITRAMFS_PATH="tests/initramfs/build/initramfs_aarch64.cpio.gz"
     fi
@@ -482,27 +489,27 @@ _run-loongarch64:
 # Usage:
 #   just wslq-run               # run aarch64 headless (100s)
 #   just wslq-run 60            # run for 60 seconds
-#   just wslq-ui                # run with aris-render kei_ui initramfs
+#   just wslq-ui                # run with legacy aris-render kei_ui initramfs
 #   just wslq-screenshot        # convert last screendump to PNG
 
 # Run kei aarch64 in WSL2 QEMU headless. Optional SECS (default 100).
-# Uses INITRAMFS env var to select the initramfs (default: render_new).
+# Uses INITRAMFS env var to select the initramfs (default: kei_tty vtty).
 [script('bash')]
 wslq-run SECS="100":
     set -e
-    export INITRAMFS="${INITRAMFS:-tests/initramfs/build/initramfs_render_new.cpio.gz}"
+    export INITRAMFS="${INITRAMFS:-tests/initramfs/build/initramfs_kei_tty.cpio.gz}"
     wsl -d Ubuntu-24.04 -e bash -lc 'bash ~/celestia/kei/scripts/wsl_qemu_aarch64.sh {{SECS}}'
 
-# Run kei with the kei_ui (aris-render browser UI) initramfs.
+# Run kei with the legacy kei_ui (aris-render runtime UI) initramfs.
 [script('bash')]
 wslq-ui SECS="110":
     set -e
     export INITRAMFS="tests/initramfs/build/initramfs_kei_ui.cpio.gz"
     wsl -d Ubuntu-24.04 -e bash -lc 'bash ~/celestia/kei/scripts/wsl_qemu_aarch64.sh {{SECS}}'
 
-# Build a render initramfs (kei_ui or kei_fbtest).
+# Build a render initramfs (kei_tty vtty console by default).
 [script('bash')]
-wslq-initramfs BIN="kei_ui":
+wslq-initramfs BIN="kei_tty":
     {{python_cmd}} scripts/build_render_initramfs.py {{BIN}}
 
 # Convert the last WSL2 screendump to PNG and show pixel stats.

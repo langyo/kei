@@ -13,7 +13,7 @@ MON_PORT="${MON_PORT:-55555}"
 SERIAL_LOG="${SERIAL_LOG:-$KEI/target/wsl_qemu_serial.log}"
 SCREEN_PPM="${SCREEN_PPM:-$KEI/target/wsl_screendump.ppm}"
 SCREEN_PNG="${SCREEN_PNG:-$KEI/target/wsl_screendump.png}"
-INITRAMFS="${INITRAMFS:-$KEI/tests/initramfs/build/initramfs_render_new.cpio.gz}"
+INITRAMFS="${INITRAMFS:-$KEI/tests/initramfs/build/initramfs_kei_tty.cpio.gz}"
 KERNEL="${KERNEL:-$KEI/target/osdk/aster-kernel/aster-kernel-osdk-bin.image}"
 
 cd "$KEI" || { echo "[err] KEI dir not found: $KEI"; exit 1; }

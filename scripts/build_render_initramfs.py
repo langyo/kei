@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build an aarch64 initramfs containing the aris-render kei_ui binary.
+"""Build an aarch64 initramfs containing an aris-render binary.
 
 Produces a newc-format cpio.gz with:
-  /init        — shell script that runs /kei_ui
-  /kei_ui      — aris-render full UI binary (Blitz + Vello CPU)
+  /init        — the render binary itself (DIRECT_INIT) or a shell script
+  /kei_tty     — aris-render vtty console binary (default)
   /bin/busybox — minimal shell + utilities
   /dev/console, /dev/null, /dev/tty, /dev/zero, /dev/urandom — device nodes
 
@@ -12,7 +12,9 @@ The aris repository location is resolved from (in priority order):
   2. A sibling ``aris`` directory next to kei (legacy default)
 
 Usage: python3 build_render_initramfs.py [binary_name] [--build]
-  binary_name defaults to 'kei_ui' (use 'kei_fbtest' for the test pattern)
+  binary_name defaults to 'kei_tty' (Linux-kernel-console-style vtty;
+  use 'kei_ui' for the legacy runtime-rendered UI, 'kei_fbtest' for the
+  test pattern)
   --build compiles the aris binary before packaging
 
 The script reuses the cpio builder from tests/initramfs/build_aarch64_cpio.py.
@@ -35,6 +37,16 @@ from build_aarch64_cpio import build  # noqa: E402
 
 # The musl target triple for aarch64 cross-compilation.
 TARGET_TRIPLE = "aarch64-unknown-linux-musl"
+
+# Per-binary cargo feature set. Every kei-target binary is built with
+# --no-default-features so desktop-only deps (winit/reqwest/fontconfig)
+# never enter the musl cross build.
+BIN_FEATURES = {
+    "kei_tty": "png",            # vtty: embedded pre-rendered console PNG
+    "kei_ui": "render",          # legacy runtime Blitz renderer
+    "kei_fbtest": "",            # pure libc pixel test
+    "kei_minimal": "",           # hello-world syscall test
+}
 
 INIT_TEMPLATE = """#!/bin/sh
 mount -t proc none /proc 2>/dev/null
@@ -60,7 +72,9 @@ def _build_aris_binary(bin_name: str) -> str:
     Runs ``cargo build --release --target aarch64-unknown-linux-musl --bin <name>``
     inside the aris repo (at ARIS). On Windows this re-execs through WSL.
     """
-    print(f"[build-aris] compiling {bin_name} for {TARGET_TRIPLE} in {ARIS}")
+    features = BIN_FEATURES.get(bin_name, "")
+    feat_args = f'--no-default-features --features "{features}"' if features else "--no-default-features"
+    print(f"[build-aris] compiling {bin_name} for {TARGET_TRIPLE} in {ARIS} ({feat_args})")
     if not os.path.isdir(ARIS):
         print(f"[err] aris repo not found at {ARIS}")
         print("      Set ARIS_REPO in .env (see .env.example).")
@@ -73,12 +87,13 @@ def _build_aris_binary(bin_name: str) -> str:
         cmd = [
             "wsl", "-d", "Ubuntu-24.04", "--", "bash", "-lc",
             f'cd "{aris_wsl}" && source ~/.cargo/env 2>/dev/null && '
-            f'cargo build --release --target {TARGET_TRIPLE} --bin {bin_name}'
+            f'cargo build --release --target {TARGET_TRIPLE} --bin {bin_name} {feat_args}'
         ]
     else:
         cmd = [
             "cargo", "build", "--release",
             "--target", TARGET_TRIPLE, "--bin", bin_name,
+            *feat_args.replace('"', '').split(),
         ]
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
@@ -101,7 +116,7 @@ def main():
     args = sys.argv[1:]
     do_build = "--build" in args
     args = [a for a in args if a != "--build"]
-    bin_name = args[0] if args else "kei_ui"
+    bin_name = args[0] if args else "kei_tty"
 
     bin_path = os.path.join(ARIS, "target", TARGET_TRIPLE, "release", bin_name)
 
@@ -157,6 +172,7 @@ def main():
 
         # Build cpio.gz
         out_name = f"initramfs_{bin_name}.cpio.gz"
+        os.makedirs(BUILD_DIR, exist_ok=True)
         out_path = os.path.join(BUILD_DIR, out_name)
         build(rootfs, out_path)
         print(f"[initramfs] wrote {out_path} ({os.path.getsize(out_path)} bytes)")
