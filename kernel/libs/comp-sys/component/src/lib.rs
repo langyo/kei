@@ -17,6 +17,7 @@ use alloc::{
 };
 
 pub use component_macro::*;
+pub use inventory;
 pub use inventory::submit;
 // This crate intentionally uses the `log` crate directly (not `ostd::log`)
 // because it is a standalone framework crate that does not depend on OSTD.
@@ -165,10 +166,51 @@ pub fn init_all(
 fn parse_input(components: Vec<ComponentInfo>) -> BTreeMap<String, ComponentInfo> {
     debug!("All component: {components:?}");
     let mut out = BTreeMap::new();
-    for component in components {
+    for mut component in components {
+        // `cargo metadata` percent-encodes non-ASCII characters in manifest
+        // paths, while `ComponentRegistry::path` (from `file!()`) keeps raw
+        // UTF-8. Decode the metadata path so both sides compare equal.
+        component.path = percent_decode_path(&component.path);
         out.insert(component.path.clone(), component);
     }
     out
+}
+
+/// Decodes percent-encoded (`%XX`) sequences in a path.
+///
+/// This is needed because `cargo metadata` reports `manifest_path` as a
+/// percent-encoded URL-ish path, so any non-ASCII workspace path (e.g. CJK
+/// directory names) would otherwise never match the raw `file!()` paths.
+fn percent_decode_path(path: &str) -> String {
+    if !path.contains('%') {
+        return path.to_owned();
+    }
+    let bytes = path.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    let hex_val = |b: u8| -> Option<u8> {
+        match b {
+            b'0'..=b'9' => Some(b - b'0'),
+            b'a'..=b'f' => Some(b - b'a' + 10),
+            b'A'..=b'F' => Some(b - b'A' + 10),
+            _ => None,
+        }
+    };
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(h), Some(l)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2])) {
+                out.push((h << 4) | l);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    match String::from_utf8(out) {
+        Ok(s) => s,
+        Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
+    }
 }
 
 /// Match the ComponentInfo with ComponentRegistry. The key is the relative path of one component
@@ -212,7 +254,27 @@ fn match_and_call(
         }
         let str = str.trim_end_matches('/').to_owned();
 
-        let Some(mut info) = components.remove(&str) else {
+        // `file!()` may be an absolute path: cargo-osdk's generated base
+        // crate references the kernel and its component crates by absolute
+        // paths, so every registry path looks like
+        // "/abs/path/to/workspace/kernel/comps/input". In that case the
+        // direct lookup against the workspace-relative ComponentInfo keys
+        // fails and every component would be silently skipped (this is why
+        // the component system appeared "unreliable" on OSDK builds). Fall
+        // back to a path-boundary suffix match against the known components.
+        let info = components.remove(&str).or_else(|| {
+            let key = components
+                .keys()
+                .filter(|k| {
+                    str.len() > k.len()
+                        && str.ends_with(k.as_str())
+                        && str.as_bytes()[str.len() - k.len() - 1] == b'/'
+                })
+                .max_by_key(|k| k.len())
+                .cloned();
+            key.and_then(|k| components.remove(&k))
+        });
+        let Some(mut info) = info else {
             debug!(
                 "Component path '{}' not found in Components.toml, skipping",
                 str

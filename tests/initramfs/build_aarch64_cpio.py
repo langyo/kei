@@ -95,12 +95,6 @@ def build(rootfs, outpath):
             print(f"skip {relpath}: {e}", file=sys.stderr)
             continue
         mode = st.st_mode
-        # Force executable bit on scripts and binaries — on Windows the
-        # filesystem mode doesn't carry the Unix x bit, but the guest needs it.
-        if stat.S_ISREG(mode):
-            basename = os.path.basename(relpath)
-            if basename in ("init", "render_test", "kei_ui") or basename.startswith("busybox"):
-                mode |= 0o111  # add execute permission
         # Normalize path separators to forward slashes for the cpio archive
         # (os.path.join uses \ on Windows, but the guest expects /).
         relpath = relpath.replace("\\", "/")
@@ -123,6 +117,20 @@ def build(rootfs, outpath):
             nlink = 1
         else:
             nlink = 1
+        # Force executable bit on scripts and binaries — on Windows the
+        # filesystem mode doesn't carry the Unix x bit, but the guest needs it.
+        # Sniff the content as well: on Windows `ln -s` silently deep-copies
+        # the target, so applet "symlinks" (e.g. bin/sh) arrive as regular
+        # busybox copies with mode 0666 and fail execve with EACCES.
+        if stat.S_ISREG(mode):
+            basename = os.path.basename(relpath)
+            if (
+                basename in ("init", "render_test", "kei_ui")
+                or basename.startswith("busybox")
+                or body.startswith(b"\x7fELF")
+                or body.startswith(b"#!")
+            ):
+                mode |= 0o111  # add execute permission
         rec = make_header(
             ino=ino, mode=mode, uid=0, gid=0, nlink=nlink,
             mtime=0,  # zero mtime for reproducibility

@@ -78,23 +78,34 @@ pub(crate) fn init_cvm_guest() {
 /// 2. This function must be called after the kernel page table is activated on
 ///    the bootstrapping processor.
 pub(crate) unsafe fn late_init_on_bsp() {
+    // Bring-up breadcrumbs: printed via the early console so a hang or fault
+    // between two steps is immediately visible on the serial log.
+    crate::early_println!("[kei-x86] late_init: trap::init_on_cpu");
     // SAFETY: This is only called once on this BSP in the boot context.
     unsafe { trap::init_on_cpu() };
 
+    crate::early_println!("[kei-x86] late_init: io_mem builder");
     // SAFETY: The caller ensures that this function is only called once on BSP,
     // after the kernel page table is activated.
     let io_mem_builder = unsafe { io::construct_io_mem_allocator_builder() };
 
+    crate::early_println!("[kei-x86] late_init: apic::init");
     kernel::apic::init(&io_mem_builder).expect("APIC doesn't exist");
+    crate::early_println!("[kei-x86] late_init: irq::chip::init");
     irq::chip::init(&io_mem_builder);
+    crate::early_println!("[kei-x86] late_init: irq::ipi::init");
     irq::ipi::init();
 
+    crate::early_println!("[kei-x86] late_init: tsc::init_tsc_freq");
     kernel::tsc::init_tsc_freq();
+    crate::early_println!("[kei-x86] late_init: timer::init_on_bsp");
     timer::init_on_bsp();
 
+    crate::early_println!("[kei-x86] late_init: smp::boot_all_aps");
     // SAFETY: We're on the BSP and we're ready to boot all APs.
     unsafe { crate::boot::smp::boot_all_aps() };
 
+    crate::early_println!("[kei-x86] late_init: iommu::init");
     if_tdx_enabled!({
     } else {
         match iommu::init(&io_mem_builder) {
@@ -103,14 +114,18 @@ pub(crate) unsafe fn late_init_on_bsp() {
         }
     });
 
+    crate::early_println!("[kei-x86] late_init: io::init");
     // SAFETY:
     // 1. All the system device memory have been removed from the builder.
     // 2. All the port I/O regions belonging to the system device are defined using the macros.
     // 3. `MAX_IO_PORT` defined in `crate::arch::io` is the maximum value specified by x86-64.
     unsafe { crate::io::init(io_mem_builder) };
 
+    crate::early_println!("[kei-x86] late_init: acpi::init");
     kernel::acpi::init();
+    crate::early_println!("[kei-x86] late_init: power::init");
     power::init();
+    crate::early_println!("[kei-x86] late_init: done");
 }
 
 /// Initializes application-processor-specific state.

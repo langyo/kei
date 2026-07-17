@@ -260,7 +260,8 @@ build-arch ARCH:
             just _build-aarch64
             ;;
         x86_64)
-            cargo osdk build --target x86_64-unknown-none
+            # x86_64 needs VDSO_LIBRARY_DIR pointing at the prebuilt vDSO .so.
+            VDSO_LIBRARY_DIR=tests/vdso cargo osdk build --scheme microvm --target-arch x86_64
             ;;
         riscv64)
             cargo osdk build --scheme riscv --target-arch riscv64
@@ -457,7 +458,7 @@ _run-x86_64:
     echo "[run] x86_64 uses 'cargo osdk run' with serial console"
     echo "[run] No SSH server on x86_64 (uses serial shell)"
     echo ""
-    cargo osdk run --target x86_64-unknown-none
+    cargo osdk run --scheme microvm --target-arch x86_64
 
 # Internal: launch RISC-V QEMU via cargo osdk run.
 [script('bash')]

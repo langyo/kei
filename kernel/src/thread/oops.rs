@@ -75,11 +75,11 @@ static OOPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 #[ostd::panic_handler]
 fn panic_handler(info: &core::panic::PanicInfo) -> ! {
-    // DIAGNOSTIC (aarch64/riscv64): ostd::error!/log output isn't visible
-    // during early boot on the qemu-direct paths (log backend not wired up).
+    // DIAGNOSTIC: ostd::error!/log output isn't visible during early boot
+    // (the log backend may not be wired up yet on the qemu-direct paths).
     // Write the panic location/message directly via early_println (PL011 on
-    // aarch64, SBI console on riscv64), bypassing the log system.
-    #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
+    // aarch64, SBI console on riscv64, 16550 on x86_64), bypassing the log
+    // system. This runs on every architecture.
     {
         if let Some(location) = info.location() {
             ostd::early_println!(
@@ -97,7 +97,6 @@ fn panic_handler(info: &core::panic::PanicInfo) -> ! {
         for _ in 0..5_000_000 {
             core::hint::spin_loop();
         }
-        ostd::early_println!("[OOPS] pre-abort drain complete");
     }
 
     let message = info.message();

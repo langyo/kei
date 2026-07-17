@@ -75,7 +75,7 @@ def test_arch(arch: str, output_dir: Path) -> str:
     cf.pending(f"Building kernel ({cfg['target']})...")
     nightly_env = dict(os.environ)
     rustup_home = os.environ.get("RUSTUP_HOME", os.path.expanduser("~/.rustup"))
-    nightly_bin = os.path.join(rustup_home, "toolchains", "nightly-2026-04-03-x86_64-unknown-linux-gnu", "bin")
+    nightly_bin = os.path.join(rustup_home, "toolchains", "nightly-2026-05-01-x86_64-unknown-linux-gnu", "bin")
     if os.path.isdir(nightly_bin):
         nightly_env["PATH"] = nightly_bin + ":" + nightly_env.get("PATH", "")
 

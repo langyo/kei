@@ -98,18 +98,11 @@ impl InodeHandle {
             return open_file.is_offset_aware();
         }
 
-        // Fallback: use the inode directly. This happens when the char device
-        // lookup failed during open (device not registered or ID mismatch).
-        // Only aarch64 uses this fallback path (QEMU TCG char-device open
-        // workaround). Other architectures should always have open_file set.
-        #[cfg(target_arch = "aarch64")]
-        {
-            self.path.inode().type_().is_seekable()
-        }
-        #[cfg(not(target_arch = "aarch64"))]
-        {
-            panic!("is_offset_aware_impl: open_file is None on non-aarch64");
-        }
+        // Fallback: use the inode directly. This is the normal path for
+        // inode-backed files without a per-open file object (regular files,
+        // directories), and also for device nodes whose char device lookup
+        // failed during open (device not registered or ID mismatch).
+        self.path.inode().type_().is_seekable()
     }
 
     /// Ensures that positional I/O (`pread`/`pwrite`) is supported.

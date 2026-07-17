@@ -48,10 +48,25 @@ pub(super) fn main() {
     // Now that the kernel page table is activated (linear VMA linking),
     // try the full component system on aarch64 too. If it fails, we have
     // manual fallbacks in init_in_first_kthread.
-    ostd::info!("calling component::init_all(Bootstrap)...");
+    ostd::early_println!("[init] calling component::init_all(Bootstrap)...");
+    {
+        // Bring-up diagnostic: dump the component metadata and the registry
+        // entries so a skipped component is immediately visible.
+        let comps = component::parse_metadata!();
+        ostd::early_println!("[comp] {} ComponentInfo entries:", comps.len());
+        for c in &comps {
+            ostd::early_println!("[comp]   info: {:?}", c);
+        }
+        let registries: Vec<_> =
+            component::inventory::iter::<component::ComponentRegistry>().collect();
+        ostd::early_println!("[comp] {} ComponentRegistry entries:", registries.len());
+        for r in registries {
+            ostd::early_println!("[comp]   registry: {:?}", r);
+        }
+    }
     match component::init_all(InitStage::Bootstrap, component::parse_metadata!()) {
-        Ok(()) => ostd::info!("component::init_all(Bootstrap) OK"),
-        Err(e) => ostd::warn!("component::init_all(Bootstrap) failed: {:?}", e),
+        Ok(()) => ostd::early_println!("[init] component::init_all(Bootstrap) OK"),
+        Err(e) => ostd::early_println!("[init] component::init_all(Bootstrap) FAILED: {:?}", e),
     }
     ostd::early_println!("Components Bootstrap done.");
     init();

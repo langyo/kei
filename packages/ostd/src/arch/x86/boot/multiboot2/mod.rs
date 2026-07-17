@@ -2,7 +2,7 @@
 
 use core::arch::global_asm;
 
-use multiboot2::{BootInformation, BootInformationHeader, MemoryAreaType};
+use multiboot2::{BootInformation, BootInformationHeader, FramebufferType, MemoryAreaType};
 
 use crate::{
     boot::{
@@ -74,6 +74,17 @@ fn is_efi_boot(mb2_info: &BootInformation) -> bool {
 
 fn parse_framebuffer_info(mb2_info: &BootInformation) -> Option<BootloaderFramebufferArg> {
     let fb_tag = mb2_info.framebuffer_tag()?.ok()?;
+
+    // Reject the EGA text-mode "framebuffer": it is a character cell buffer
+    // (usually at 0xB8000), not a pixel buffer, and below 1 MiB it is outside
+    // the I/O memory allocator's ranges, so the framebuffer component would
+    // fail to acquire it. Only graphics modes (RGB / indexed) are usable.
+    if !matches!(
+        fb_tag.buffer_type(),
+        Ok(FramebufferType::RGB { .. } | FramebufferType::Indexed { .. })
+    ) {
+        return None;
+    }
 
     Some(BootloaderFramebufferArg {
         address: fb_tag.address() as usize,

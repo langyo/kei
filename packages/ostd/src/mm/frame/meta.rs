@@ -468,6 +468,20 @@ pub(crate) unsafe fn init() -> Segment<MetaPageMeta> {
             .filter(|r| {
                 if cfg!(target_arch = "aarch64") {
                     r.typ() == crate::boot::memory_region::MemoryRegionType::Usable
+                } else if cfg!(target_arch = "x86_64") {
+                    // Firmware may place ACPI tables in a Reserved region
+                    // above the last Usable one (with 2 GiB of RAM SeaBIOS
+                    // puts the ACPI area at 0x7ffe0000..0x80000000). The
+                    // linear mapping only covers physical memory up to
+                    // max_paddr, so ACPI parsing would fault on such tables.
+                    // Include Reserved/NVS regions on x86_64 so the linear
+                    // mapping always covers firmware tables.
+                    r.typ().is_physical()
+                        || matches!(
+                            r.typ(),
+                            crate::boot::memory_region::MemoryRegionType::Reserved
+                                | crate::boot::memory_region::MemoryRegionType::NonVolatileSleep
+                        )
                 } else {
                     r.typ().is_physical()
                 }

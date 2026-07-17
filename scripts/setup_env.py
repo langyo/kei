@@ -74,7 +74,7 @@ def install_cargo_osdk() -> bool:
         cf.warn("packages/osdk/ directory not found, skipping cargo-osdk install")
         return False
 
-    nightly_bin = Path.home() / ".rustup" / "toolchains" / "nightly-2026-04-03-x86_64-unknown-linux-gnu" / "bin"
+    nightly_bin = Path.home() / ".rustup" / "toolchains" / "nightly-2026-05-01-x86_64-unknown-linux-gnu" / "bin"
     env = dict(os.environ)
     if nightly_bin.exists():
         env["PATH"] = str(nightly_bin) + ":" + env.get("PATH", "")

@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# kei x86_64 initramfs entry point (PID 1).
+# Serial-console counterpart of src/init_aarch64: no dropbear, no block
+# devices — just bring up the virtual filesystems and hand over to the
+# command line passed by the kernel (default: a login shell on console).
+
+mount -t proc none /proc 2>/dev/null
+mount -t sysfs none /sys 2>/dev/null
+mount -t devtmpfs none /dev 2>/dev/null
+
+echo ""
+echo "=== kei ignition (x86_64) ==="
+echo "Kernel booted successfully"
+echo ""
+
+echo "Boot complete. Spawning shell on console."
+if [ "$#" -eq 0 ]; then
+    set -- /bin/sh
+fi
+exec "$@"

@@ -25,3 +25,10 @@ ostd-macros = { path = "packages/ostd/libs/ostd-macros" }
 ostd-test = { path = "packages/ostd/libs/ostd-test" }
 osdk-frame-allocator = { path = "packages/osdk/deps/frame-allocator" }
 osdk-heap-allocator = { path = "packages/osdk/deps/heap-allocator" }
+# See the matching entry in the root Cargo.toml: x86_64 0.15.5 requires a
+# newer nightly than the pinned one, so use the locally vendored crate with
+# the Step::forward/backward_overflowing impls stripped.
+x86_64 = { path = "packages/patches/x86_64" }
+# NOTE: unwinding is intentionally NOT patched here — see the matching note
+# in the root Cargo.toml (the `=0.2.8` pin in packages/ostd/Cargo.toml is
+# used for every architecture).

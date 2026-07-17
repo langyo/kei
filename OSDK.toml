@@ -30,11 +30,40 @@ args = "$(./scripts/tools/qemu_args.sh test)"
 
 # Other Schemes
 
+# x86_64 boots as a Linux bzImage on the QEMU microvm machine (qemu-direct).
+# The args are inlined (like the aarch64 scheme) instead of going through
+# scripts/tools/qemu_args.sh because that script (a) is not executable under
+# WSL when the worktree is checked out with core.autocrlf=true (CRLF shebang
+# breaks the #!/bin/bash interpreter), and (b) references upstream Nix-built
+# disk images (./test/initramfs/build/ext2.img et al.) that kei does not have,
+# which makes QEMU refuse to start.
 [scheme."microvm"]
+supported_archs = ["x86_64"]
 boot.method = "qemu-direct"
 build.strip_elf = true
 grub.boot_protocol = "linux"
-qemu.args = "$(./scripts/tools/qemu_args.sh microvm)"
+
+# Serial console and QEMU monitor are multiplexed onto stdio (use Ctrl-A h for
+# the monitor). The full session is also logged to target/qemu_x86_64.log.
+qemu.args = """\
+    -cpu Icelake-Server,+x2apic \
+    -machine microvm,rtc=on \
+    -nodefaults \
+    -no-user-config \
+    -m ${MEM:-2G} \
+    -smp ${SMP:-1} \
+    --no-reboot \
+    -display none \
+    -serial chardev:mux \
+    -monitor chardev:mux \
+    -chardev stdio,id=mux,mux=on,signal=off,logfile=target/qemu_x86_64.log \
+    -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+    -device virtio-keyboard-device \
+    -device virtio-serial-device \
+    -device virtconsole,chardev=mux \
+    -netdev user,id=net0,hostfwd=tcp::2223-:22 \
+    -device virtio-net-device,netdev=net0 \
+"""
 
 [scheme."iommu"]
 supported_archs = ["x86_64"]

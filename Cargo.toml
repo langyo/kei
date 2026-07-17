@@ -299,3 +299,15 @@ ostd = { path = "packages/ostd" }
 ostd-pod = { path = "packages/ostd/libs/ostd-pod" }
 ostd-macros = { path = "packages/ostd/libs/ostd-macros" }
 ostd-test = { path = "packages/ostd/libs/ostd-test" }
+# x86_64 0.15.5 (the latest crates.io release) implements
+# `Step::forward_overflowing`/`backward_overflowing`, which only exist in
+# `core::iter::Step` on nightly >= 2026-07-10. The pinned toolchain
+# (nightly-2026-05-01) does not have them, so the crate fails with E0407.
+# tdx-guest 0.3.2 requires `~0.15.5`, so an older release cannot be used
+# either. Vendor 0.15.5 locally and strip the six offending impls (see
+# packages/patches/strip_step_overflowing.py).
+x86_64 = { path = "packages/patches/x86_64" }
+# NOTE: unwinding is intentionally NOT patched here. All architectures use
+# the `=0.2.8` pin from packages/ostd/Cargo.toml, which builds on the pinned
+# nightly-2026-05-01 toolchain (the 0.2.10 vendored crate was dropped in
+# favor of the pin shared with the riscv64 boot work).

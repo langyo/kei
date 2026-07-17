@@ -9,19 +9,25 @@ on:
 jobs:
   test-aarch64:
     runs-on: ubuntu-24.04-arm64
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@nightly
+      # Keep in sync with rust-toolchain.toml (nightly-2026-05-01).
+      - uses: dtolnay/rust-toolchain@nightly-2026-05-01
         with:
           components: rust-src, rustc-dev, llvm-tools-preview
           targets: aarch64-unknown-none
+      - uses: Swatinem/rust-cache@v2
       - name: Install QEMU
         run: sudo apt-get update && sudo apt-get install -y qemu-system-arm
       # scripts/test_all_arch.py -> scripts/utils/build_env.py hard-depends on
       # the external celestia_devtools package; install it explicitly.
       - name: Install celestia-devtools
         run: pip install git+https://github.com/celestia-island/celestia-devtools.git
+      # cargo osdk is required by scripts/test_all_arch.py; built from the
+      # vendored source at osdk/.
+      - name: Install cargo-osdk
+        run: cargo install --path osdk --force
       - name: Boot test aarch64
         run: |
           chmod +x scripts/*.sh 2>/dev/null; true
@@ -29,20 +35,21 @@ jobs:
 
   test-x86_64:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # TODO: drop continue-on-error once the x86_64 grub/ISO boot chain lands
-    # on feat/next-milestone (currently on agent/boot-x86_64).
-    continue-on-error: true
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@nightly
+      # Keep in sync with rust-toolchain.toml (nightly-2026-05-01).
+      - uses: dtolnay/rust-toolchain@nightly-2026-05-01
         with:
           components: rust-src, rustc-dev, llvm-tools-preview
           targets: x86_64-unknown-none
+      - uses: Swatinem/rust-cache@v2
       - name: Install QEMU
         run: sudo apt-get update && sudo apt-get install -y qemu-system-x86
       - name: Install celestia-devtools
         run: pip install git+https://github.com/celestia-island/celestia-devtools.git
+      - name: Install cargo-osdk
+        run: cargo install --path osdk --force
       - name: Boot test x86_64
         run: |
           chmod +x scripts/*.sh 2>/dev/null; true
@@ -50,18 +57,22 @@ jobs:
 
   test-riscv64:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@nightly
+      # Keep in sync with rust-toolchain.toml (nightly-2026-05-01).
+      - uses: dtolnay/rust-toolchain@nightly-2026-05-01
         with:
           components: rust-src, rustc-dev, llvm-tools-preview
           targets: riscv64imac-unknown-none-elf
+      - uses: Swatinem/rust-cache@v2
       - name: Install QEMU
         run: sudo apt-get update && sudo apt-get install -y qemu-system-misc
       - name: Install celestia-devtools
         run: pip install git+https://github.com/celestia-island/celestia-devtools.git
+      - name: Install cargo-osdk
+        run: cargo install --path osdk --force
       - name: Boot test riscv64
         run: |
           chmod +x scripts/*.sh 2>/dev/null; true
