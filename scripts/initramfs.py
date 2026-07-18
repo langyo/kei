@@ -31,7 +31,7 @@ import build_env
 import cli_format as cf
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-INITRAMFS_BUILD_DIR = PROJECT_ROOT / "test" / "initramfs" / "build"
+INITRAMFS_BUILD_DIR = PROJECT_ROOT / "tests" / "initramfs" / "build"
 INITRAMFS_GZ = INITRAMFS_BUILD_DIR / "initramfs.cpio.gz"
 
 
@@ -118,7 +118,7 @@ def find_busybox(arch: str) -> Path | None:
         return Path(env_path)
 
     # 2. Pre-built per-arch binary
-    prebuilt = PROJECT_ROOT / "test" / "initramfs" / f"busybox-{arch}"
+    prebuilt = PROJECT_ROOT / "tests" / "initramfs" / f"busybox-{arch}"
     if prebuilt.exists():
         return prebuilt
 

@@ -69,7 +69,7 @@ def install_apt_packages(packages: list[str], sudo_pass: str) -> bool:
 def install_cargo_osdk() -> bool:
     """Install cargo-osdk from local source."""
     project_root = Path(__file__).resolve().parent.parent
-    osdk_dir = project_root / "osdk"
+    osdk_dir = project_root / "packages" / "osdk"
     if not osdk_dir.exists():
         cf.warn("packages/osdk/ directory not found, skipping cargo-osdk install")
         return False

@@ -71,6 +71,23 @@ def test_arch(arch: str, output_dir: Path) -> str:
         cf.info(f"  Install: sudo apt install qemu-system-{arch.replace('_', '-')}")
         return "SKIP"
 
+    # cargo osdk build canonicalizes the initramfs path from OSDK.toml at
+    # build time; produce it first (tracked busybox, no root needed).
+    # aarch64 needs its own dropbear-based initramfs which is not CI-ready
+    # yet (build_aarch64_rootfs.sh is WSL-specific) — left to a follow-up.
+    initramfs_gz = PROJECT_ROOT / "tests" / "initramfs" / "build" / "initramfs.cpio.gz"
+    if arch != "aarch64" and not initramfs_gz.exists():
+        cf.pending("Packing initramfs (build-time requirement)...")
+        rootfs_script = PROJECT_ROOT / "tests" / "initramfs" / "build_x86_64_rootfs.sh"
+        # Invoke via bash explicitly: the exec bit / shebang do not survive
+        # CRLF checkouts on Windows hosts.
+        pack = subprocess.run(["bash", str(rootfs_script)], cwd=PROJECT_ROOT, capture_output=True)
+        if pack.returncode != 0:
+            cf.fail("initramfs packing failed")
+            raw = (pack.stdout or b"") + (pack.stderr or b"")
+            print((raw if isinstance(raw, str) else raw.decode("utf-8", "replace"))[-3000:])
+            return "FAIL"
+
     # Build kernel for this architecture
     cf.pending(f"Building kernel ({cfg['target']})...")
     nightly_env = dict(os.environ)
@@ -86,6 +103,11 @@ def test_arch(arch: str, output_dir: Path) -> str:
     build_result = subprocess.run(build_cmd, cwd=PROJECT_ROOT, capture_output=True, env=nightly_env)
     if build_result.returncode != 0:
         cf.fail(f"Build failed for {arch}")
+        # The captured build output is the only way to diagnose CI failures;
+        # print its tail instead of swallowing it.
+        raw = (build_result.stdout or b"") + (build_result.stderr or b"")
+        tail = raw if isinstance(raw, str) else raw.decode("utf-8", "replace")
+        print(tail[-60000:])
         return "FAIL"
 
     # Locate kernel binary — OSDK outputs under target/osdk/
