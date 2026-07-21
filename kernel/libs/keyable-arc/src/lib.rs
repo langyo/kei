@@ -233,9 +233,9 @@ impl<T: ?Sized + fmt::Debug> fmt::Debug for KeyableArc<T> {
     }
 }
 
-//=========================================================
+//------
 // The weak version
-//=========================================================
+//------
 
 /// The weak counterpart of `KeyableArc<T>`, similar to `Weak<T>`.
 ///

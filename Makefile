@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 
-# =========================== Makefile options. ===============================
+# ------ Makefile options. ------
 
 # Global build options.
 TARGET_ARCH ?= x86_64
@@ -91,7 +91,7 @@ DEV_SUBSTITUTER ?= https://aster-nixos-dev.cachix.org
 DEV_TRUSTED_PUBLIC_KEY ?= aster-nixos-dev.cachix.org-1:xrCbE2flfliFTQCY/2HeJoT2tCO+5kMTZeLIUH9lnIA=
 # End of Cachix binary cache settings
 
-# ========================= End of Makefile options. ==========================
+# ------ End of Makefile options. ------
 
 export OSDK_TARGET_ARCH=$(TARGET_ARCH)
 

@@ -78,5 +78,5 @@ RC=$?
 cp -f "$STAGE_POSIX/serial.log" "$LOG" 2>/dev/null || true
 
 echo "[run-x86_64] qemu exited with code $RC (124/137 = timeout reached)"
-echo "===== serial log ====="
+echo "------ serial log ------"
 cat "$LOG" 2>/dev/null || echo "(no serial output captured)"

@@ -9,9 +9,9 @@ use nixos_test_framework::*;
 
 nixos_test_main!();
 
-// ============================================================================
+// ------
 // Podman
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn podman_run_alpine_container(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -46,9 +46,9 @@ fn podman_open_interactive_session(nixos_shell: &mut Session) -> Result<(), Erro
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Skopeo
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn skopeo_inspect_image(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -60,9 +60,9 @@ fn skopeo_inspect_image(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Qemu
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn qemu_display_version(nixos_shell: &mut Session) -> Result<(), Error> {

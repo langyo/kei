@@ -9,9 +9,9 @@ use nixos_test_framework::*;
 
 nixos_test_main!();
 
-// ============================================================================
+// ------
 // Audio Processing - SoX
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn sox_create_tone(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -67,9 +67,9 @@ fn sox_trim_audio(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Graphics & Image Editing - ImageMagick
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn magick_create_image(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -117,9 +117,9 @@ fn magick_rotate_image(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Video Processing - FFmpeg
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn ffmpeg_create_video(nixos_shell: &mut Session) -> Result<(), Error> {

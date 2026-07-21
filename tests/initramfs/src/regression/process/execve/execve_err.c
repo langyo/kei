@@ -475,9 +475,9 @@ FN_TEST(filesz_larger_than_memsz)
 }
 END_TEST()
 
-// ==========================
+// ------
 // Below are tests for ET_DYN
-// ==========================
+// ------
 
 FN_SETUP(init_dyn)
 {

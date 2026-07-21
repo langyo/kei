@@ -9,9 +9,9 @@ use nixos_test_framework::*;
 
 nixos_test_main!();
 
-// ============================================================================
+// ------
 // Compilers - Clang
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn clang_compile(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -29,9 +29,9 @@ fn clang_emit_llvm_ir(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Compilers - GCC
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn gcc_compile(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -49,9 +49,9 @@ fn gcc_compile_object_file(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Programming Language Runtimes - Go
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn go_run_program(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -62,9 +62,9 @@ fn go_run_program(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Programming Language Runtimes - Lua
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn lua_run_script(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -79,9 +79,9 @@ fn lua_run_inline_code(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Programming Language Runtimes - Node.js
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn nodejs_run_script(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -96,9 +96,9 @@ fn nodejs_run_inline_code(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Programming Language Runtimes - Octave
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn octave_run_script(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -113,9 +113,9 @@ fn octave_run_inline_code(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Programming Language Runtimes - OpenJDK
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn java_compile_run_program(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -125,9 +125,9 @@ fn java_compile_run_program(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Programming Language Runtimes - Perl
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn perl_run_script(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -142,9 +142,9 @@ fn perl_run_inline_code(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Programming Language Runtimes - PHP
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn php_run_script(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -159,9 +159,9 @@ fn php_run_inline_code(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Programming Language Runtimes - Python 3
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn python3_run_script(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -176,9 +176,9 @@ fn python3_run_inline_code(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Programming Language Runtimes - Ruby
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn ruby_run_script(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -193,9 +193,9 @@ fn ruby_run_inline_code(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Programming Language Runtimes - Rust
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn rust_compile_run_program(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -207,9 +207,9 @@ fn rust_compile_run_program(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Version Control - Git
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn git_init_status(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -245,9 +245,9 @@ fn git_create_branch(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Build Tools - Cargo
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn cargo_create_build_project(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -258,9 +258,9 @@ fn cargo_create_build_project(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Build Tools - CMake
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn cmake_build(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -274,9 +274,9 @@ fn cmake_build(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Build Tools - Make
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn make_run_target(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -286,9 +286,9 @@ fn make_run_target(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Build Tools - Meson (uses Ninja as the primary backend)
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn meson_build(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -304,9 +304,9 @@ fn meson_build(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Debugging Tools - GDB
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn gdb_debug(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -345,9 +345,9 @@ fn gdb_debug(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Debugging Tools - strace
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn strace_ls(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -360,9 +360,9 @@ fn strace_ls(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Hugo
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn hugo_serve_site(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -380,9 +380,9 @@ fn hugo_serve_site(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // direnv
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn direnv_load_environment(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -400,9 +400,9 @@ fn direnv_load_environment(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Shellcheck
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn shellcheck_lint_script(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -420,9 +420,9 @@ fn shellcheck_lint_script(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // jq
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn jq_query_json(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -435,9 +435,9 @@ fn jq_query_json(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // yq
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn yq_query_yaml(nixos_shell: &mut Session) -> Result<(), Error> {

@@ -9,9 +9,9 @@ use nixos_test_framework::*;
 
 nixos_test_main!();
 
-// ============================================================================
+// ------
 // Terminal Chat Clients - Irssi
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn irssi_connect(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -19,9 +19,9 @@ fn irssi_connect(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Terminal Chat Clients - WeeChat
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn weechat_connect(nixos_shell: &mut Session) -> Result<(), Error> {

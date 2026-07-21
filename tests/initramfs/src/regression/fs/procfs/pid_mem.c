@@ -39,7 +39,7 @@ FN_TEST(proc_mem_alien)
 
 	pid_t child = TEST_SUCC(fork());
 	if (child == 0) {
-		// ===== Child =====
+		// ------ Child ------
 		CHECK(close(pipe_c2p[0]));
 		CHECK(close(pipe_p2c[1]));
 
@@ -72,7 +72,7 @@ FN_TEST(proc_mem_alien)
 		exit(EXIT_SUCCESS);
 	}
 
-	// ===== Parent =====
+	// ------ Parent ------
 	TEST_SUCC(close(pipe_c2p[1]));
 	TEST_SUCC(close(pipe_p2c[0]));
 

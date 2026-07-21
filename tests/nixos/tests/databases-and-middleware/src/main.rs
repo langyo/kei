@@ -9,9 +9,9 @@ use nixos_test_framework::*;
 
 nixos_test_main!();
 
-// ============================================================================
+// ------
 // Relational Databases - SQLite
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn sqlite_create_database(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -48,9 +48,9 @@ fn sqlite_select_records(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Key-Value Stores - Redis
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn redis_set_get_delete_key(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -75,9 +75,9 @@ fn redis_set_get_delete_key(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Key-Value Stores - Valkey
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn valkey_set_get_delete_key(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -102,9 +102,9 @@ fn valkey_set_get_delete_key(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Distributed Key-Value Stores - etcd
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn etcd_put_get_delete_key(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -128,9 +128,9 @@ fn etcd_put_get_delete_key(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Time Series Databases - InfluxDB
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn influxdb_write_query_data(nixos_shell: &mut Session) -> Result<(), Error> {

@@ -52,7 +52,7 @@ fn go_stdlib(nixos_shell: &mut Session) -> Result<(), Error> {
         for (test, _) in &failed_tests {
             println!("  - {test}");
         }
-        println!("==============================");
+        println!("------");
 
         return Err(Error::Aggregated {
             summary: "Selected Go stdlib tests failed!".to_string(),

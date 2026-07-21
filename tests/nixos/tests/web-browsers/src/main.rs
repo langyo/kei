@@ -9,9 +9,9 @@ use nixos_test_framework::*;
 
 nixos_test_main!();
 
-// ============================================================================
+// ------
 // Browsers
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn firefox_screenshot_website(nixos_shell: &mut Session) -> Result<(), Error> {

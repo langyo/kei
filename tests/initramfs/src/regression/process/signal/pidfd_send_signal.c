@@ -42,7 +42,7 @@ void setup_test_siginfo(siginfo_t *info, int sig, int si_code)
 	info->si_uid = getuid();
 }
 
-/* ==========================
+/* ------
  *    Tests for processes
  * ========================== */
 
@@ -88,7 +88,7 @@ FN_SETUP(cleanup_process)
 }
 END_SETUP()
 
-/* ==========================
+/* ------
  *   Tests for NULL siginfo
  * ========================== */
 
@@ -121,7 +121,7 @@ FN_SETUP(cleanup_null_info_process)
 }
 END_SETUP()
 
-/* ==========================
+/* ------
  *  Tests for null signal (0)
  * ========================== */
 
@@ -156,7 +156,7 @@ FN_SETUP(cleanup_null_sig_process)
 }
 END_SETUP()
 
-/* ==========================
+/* ------
  *  Tests for `PIDFD_SELF_*`
  * ========================== */
 
@@ -263,7 +263,7 @@ END_TEST()
 
 // FIXME: Enable thread tests once pidfd for threads is supported
 #ifndef __asterinas__
-/* ==========================
+/* ------
  *     Tests for threads
  * ========================== */
 

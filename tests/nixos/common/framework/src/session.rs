@@ -351,7 +351,7 @@ impl Session {
                 println!("Expected: {}", expected);
                 println!("Got: {}", got);
                 println!("Exit code: {:?}", exit_code);
-                println!("========================");
+                println!("------");
             }
             Error::Timeout {
                 expected,
@@ -362,19 +362,19 @@ impl Session {
                 println!("Expected: {}", expected);
                 println!("Got: {}", got);
                 println!("Timeout: {:?}", timeout);
-                println!("============================");
+                println!("------");
             }
             Error::UnexpectedOutput { expected, got } => {
                 println!("=== Unexpected Output ===");
                 println!("Expected: {}", expected);
                 println!("Output before prompt:\n{}", got);
-                println!("=========================");
+                println!("------");
             }
             Error::Protocol { reason, got } => {
                 println!("=== Protocol Error Details ===");
                 println!("Reason: {}", reason);
                 println!("Got: {}", got);
-                println!("==============================");
+                println!("------");
             }
             Error::NonZeroExit {
                 exit_status,
@@ -383,12 +383,12 @@ impl Session {
                 println!("=== Command Exit Error Details ===");
                 println!("Exit status: {}", exit_status);
                 println!("Output:\n{}", output);
-                println!("==================================");
+                println!("------");
             }
             Error::Pty(reason) => {
                 println!("=== PTY Error Details ===");
                 println!("Reason: {}", reason);
-                println!("=========================");
+                println!("------");
             }
             Error::Aggregated {
                 summary,
@@ -400,7 +400,7 @@ impl Session {
                     println!("--- {}", name);
                     Self::output_error(error);
                 }
-                println!("================================");
+                println!("------");
             }
         }
     }

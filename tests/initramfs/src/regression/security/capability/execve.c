@@ -61,9 +61,9 @@ END_SETUP()
 	}                                                                   \
 	END_TEST()
 
-// ===========================================================
+// ------
 // Tests whose initial state does not contain any capabilities
-// ===========================================================
+// ------
 
 #define TEST_EXECVE_GAIN_CAPS(name, ruid, euid, suid)                        \
 	TEST_CAPS_AFTER_EXECVE(name, ruid, euid, suid, clear_caps, CAPS_ALL, \
@@ -96,9 +96,9 @@ TEST_EXECVE_NO_GAIN_CAPS(rnn_no_gain_caps, root, nobody, nobody, CAPS_ALL);
 TEST_EXECVE_NO_GAIN_CAPS(nnr_no_gain_caps, nobody, nobody, root, CAPS_NONE);
 TEST_EXECVE_NO_GAIN_CAPS(nnn_no_gain_caps, nobody, nobody, nobody, CAPS_NONE);
 
-// ===================================================
+// ------
 // Tests whose initial state contains all capabilities
-// ===================================================
+// ------
 
 #define TEST_EXECVE_NO_LOST_CAPS(name, ruid, euid, suid)               \
 	TEST_CAPS_AFTER_EXECVE(name, ruid, euid, suid, noop, CAPS_ALL, \

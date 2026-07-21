@@ -45,7 +45,7 @@ fn python3_regrtest(nixos_shell: &mut Session) -> Result<(), Error> {
         for (test, _) in &failed_tests {
             println!("  - {test}");
         }
-        println!("======================================");
+        println!("------");
 
         return Err(Error::Aggregated {
             summary: "Selected Python 3 regression tests failed!".to_string(),

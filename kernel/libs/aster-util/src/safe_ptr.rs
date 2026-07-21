@@ -178,7 +178,7 @@ impl<T, M: HasPaddr, R> HasPaddr for SafePtr<T, M, R> {
     }
 }
 
-// =============== Read and write methods ==============
+// ------ Read and write methods ------
 impl<T: Pod, M: VmIo, R: TRights> SafePtr<T, M, TRightSet<R>> {
     /// Reads the value from the pointer.
     ///
@@ -244,7 +244,7 @@ impl<T: Pod, M: VmIo, R: TRights> SafePtr<T, M, TRightSet<R>> {
     }
 }
 
-// =============== Read and write methods ==============
+// ------ Read and write methods ------
 impl<T: PodOnce, M: VmIoOnce, R: TRights> SafePtr<T, M, TRightSet<R>> {
     /// Reads the value from the pointer using one non-tearing instruction.
     ///
@@ -267,7 +267,7 @@ impl<T: PodOnce, M: VmIoOnce, R: TRights> SafePtr<T, M, TRightSet<R>> {
     }
 }
 
-// =============== Address-related methods ==============
+// ------ Address-related methods ------
 impl<T, M, R> SafePtr<T, M, R> {
     pub const fn is_aligned(&self) -> bool {
         self.offset.is_multiple_of(align_of::<T>())
@@ -304,7 +304,7 @@ impl<T, M, R> SafePtr<T, M, R> {
     }
 }
 
-// =============== VM object-related methods ==============
+// ------ VM object-related methods ------
 impl<T, M, R> SafePtr<T, M, R> {
     pub const fn vm(&self) -> &M {
         &self.vm_obj
@@ -315,7 +315,7 @@ impl<T, M, R> SafePtr<T, M, R> {
     }
 }
 
-// =============== VM object-related methods ==============
+// ------ VM object-related methods ------
 impl<T, M, R: Clone> SafePtr<T, M, R> {
     /// Construct a new SafePtr which will point to the same address
     pub fn borrow_vm(&self) -> SafePtr<T, &M, R> {
@@ -334,7 +334,7 @@ impl<T, M, R: Clone> SafePtr<T, M, R> {
     }
 }
 
-// =============== Type conversion methods ==============
+// ------ Type conversion methods ------
 impl<T, M, R> SafePtr<T, M, R> {
     /// Cast the accessed structure into a new one, which is usually used when accessing a field in a structure.
     pub fn cast<U>(self) -> SafePtr<U, M, R> {
@@ -353,7 +353,7 @@ impl<T, M, R> SafePtr<T, M, R> {
     }
 }
 
-// =============== Type conversion methods ==============
+// ------ Type conversion methods ------
 impl<T, M, R: TRights> SafePtr<T, M, TRightSet<R>> {
     /// Construct a new SafePtr and restrict the rights of it.
     ///

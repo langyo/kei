@@ -15,9 +15,9 @@ use x86_64::registers::rflags::RFlags;
 
 use crate::prelude::*;
 
-// =====================================================================
+// ------
 // Public ABI mirror.
-// =====================================================================
+// ------
 
 /// Mirror of Linux's `struct user_regs_struct` for x86-64.
 //
@@ -211,9 +211,9 @@ pub fn disable_single_step(regs: &mut GeneralRegs) {
     regs.rflags &= !(RFlags::TRAP_FLAG.bits() as usize);
 }
 
-// =====================================================================
+// ------
 // Per-register policy table.
-// =====================================================================
+// ------
 
 macro_rules! off {
     ($field:ident) => {

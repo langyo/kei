@@ -87,7 +87,7 @@ if [ "$run_count" -eq 0 ]; then
 fi
 echo "Test cases to be executed: $run_count"
 
-echo "================================"
+echo "------"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -186,7 +186,7 @@ for dir in $dirs ; do
 done
 
 echo ""
-echo "=========== Summary ============"
+echo "------ Summary ------"
 printf '%b%s%b of %b%s%b test cases passed.\n' \
     "$GREEN" "$passed_tests" "$NC" "$GREEN" "$total_tests" "$NC"
 if [ "$failed_tests" -gt 0 ]; then

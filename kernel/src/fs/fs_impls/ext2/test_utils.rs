@@ -31,9 +31,9 @@ use crate::{
 const DOT_BYTE: &[u8] = b".";
 const DOT_DOT_BYTE: &[u8] = b"..";
 
-// ===========================================================================
+// ------
 // Layer 0: Primitives — assertions, bit manipulation
-// ===========================================================================
+// ------
 
 macro_rules! assert_errno {
     ($expr:expr, $errno:expr) => {
@@ -57,9 +57,9 @@ pub(super) fn set_bit_lsb0(buf: &mut [u8], bit: usize) {
     buf[byte] |= 1u8 << bit_in_byte;
 }
 
-// ===========================================================================
+// ------
 // Layer 1: Mock devices
-// ===========================================================================
+// ------
 
 pub(super) struct Ext2MemoryDisk {
     segment: Segment<()>,
@@ -161,9 +161,9 @@ impl BlockDevice for Ext2MemoryDisk {
     }
 }
 
-// ===========================================================================
+// ------
 // Layer 2: Raw data factories
-// ===========================================================================
+// ------
 
 pub(super) fn make_valid_raw_super_block(nr_block_groups: u32) -> RawSuperBlock {
     let mut raw = RawSuperBlock::default();
@@ -283,9 +283,9 @@ impl RawInodeBuilder {
     }
 }
 
-// ===========================================================================
+// ------
 // Layer 3: Disk layout writers
-// ===========================================================================
+// ------
 
 pub(super) fn write_indirect_ptr(disk: &Ext2MemoryDisk, bid: u32, index: u32, next: u32) {
     let offset = Bid::new(bid as u64).to_offset() + (index as usize) * size_of::<u32>();
@@ -443,9 +443,9 @@ pub(super) fn write_simple_root_dir_block(disk: &Ext2MemoryDisk, root_bid: u32) 
         .unwrap();
 }
 
-// ===========================================================================
+// ------
 // Layer 4: Fixture — strategy enums, Ext2Fixture, Ext2FixtureBuilder
-// ===========================================================================
+// ------
 
 #[derive(Clone)]
 pub(super) enum BlockBitmapInit {
@@ -739,9 +739,9 @@ impl Ext2FixtureBuilder {
     }
 }
 
-// ===========================================================================
+// ------
 // Layer 5: Convenience helpers
-// ===========================================================================
+// ------
 
 pub(super) fn create_file(dir: &Arc<Inode>, name: &str) -> Arc<Inode> {
     dir.create(name, InodeType::File, FilePerm::from_bits_truncate(0o644))

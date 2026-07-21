@@ -9,9 +9,9 @@ use nixos_test_framework::*;
 
 nixos_test_main!();
 
-// ============================================================================
+// ------
 // Document Viewers - MuPDF
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn mutool_inspect_convert_pdf(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -32,9 +32,9 @@ fn mutool_inspect_convert_pdf(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Document Conversion - pandoc
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn pandoc_convert_markdown_to_html(nixos_shell: &mut Session) -> Result<(), Error> {

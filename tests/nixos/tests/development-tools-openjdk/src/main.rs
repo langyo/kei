@@ -44,7 +44,7 @@ fn openjdk_regression(nixos_shell: &mut Session) -> Result<(), Error> {
         for (test, _) in &failed_tests {
             println!("  - {test}");
         }
-        println!("==============================");
+        println!("------");
 
         return Err(Error::Aggregated {
             summary: "Selected OpenJDK regression tests failed!".to_string(),

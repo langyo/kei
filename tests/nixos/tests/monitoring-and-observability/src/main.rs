@@ -9,9 +9,9 @@ use nixos_test_framework::*;
 
 nixos_test_main!();
 
-// ============================================================================
+// ------
 // Metrics & Alerting - Prometheus
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn prometheus_query_metrics(nixos_shell: &mut Session) -> Result<(), Error> {

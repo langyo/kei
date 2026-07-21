@@ -9,9 +9,9 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
-// ============================================================================
+// ------
 // Helper macros
-// ============================================================================
+// ------
 
 #define SHM_OBJ "shm_test" // Name of shared memory object
 #define SHM_SIZE 0x1000 // Size (in bytes) of shared memory object
@@ -29,9 +29,9 @@
 #define MSG3 "4th Hello"
 #define MSG_SIZE (strlen(MSG0) + 1)
 
-// ============================================================================
+// ------
 // Test functions for producer and consumer to communicate through shared memory
-// ============================================================================
+// ------
 
 int producer_process()
 {
@@ -155,9 +155,9 @@ int consumer_process()
 	return 0;
 }
 
-// ============================================================================
+// ------
 // Test entry
-// ============================================================================
+// ------
 
 int main(int argc, const char *argv[])
 {

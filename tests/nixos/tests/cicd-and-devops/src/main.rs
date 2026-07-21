@@ -9,9 +9,9 @@ use nixos_test_framework::*;
 
 nixos_test_main!();
 
-// ============================================================================
+// ------
 // CI/CD Runners - just
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn just_run_recipe(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -24,9 +24,9 @@ fn just_run_recipe(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // CI/CD Runners - Task
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn task_run_task(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -40,9 +40,9 @@ fn task_run_task(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Release Automation - GoReleaser
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn goreleaser_release_project(nixos_shell: &mut Session) -> Result<(), Error> {

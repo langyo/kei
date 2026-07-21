@@ -9,9 +9,9 @@ use nixos_test_framework::*;
 
 nixos_test_main!();
 
-// ============================================================================
+// ------
 // Web Servers
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn httpd_serve_webpage(nixos_shell: &mut Session) -> Result<(), Error> {

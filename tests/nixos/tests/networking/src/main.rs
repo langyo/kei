@@ -9,9 +9,9 @@ use nixos_test_framework::*;
 
 nixos_test_main!();
 
-// ============================================================================
+// ------
 // Network Utilities
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn curl_fetch_webpage(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -164,9 +164,9 @@ fn wget_download(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // DNS Tools
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn ldns_drill_basic(nixos_shell: &mut Session) -> Result<(), Error> {

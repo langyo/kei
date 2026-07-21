@@ -9,9 +9,9 @@ use nixos_test_framework::*;
 
 nixos_test_main!();
 
-// ============================================================================
+// ------
 // Deep Learning Frameworks - PyTorch
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn pytorch_run_script(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -22,9 +22,9 @@ fn pytorch_run_script(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // Deep Learning Frameworks - TensorFlow
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn tensorflow_run_script(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -35,9 +35,9 @@ fn tensorflow_run_script(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // LLM Inference Engines - Ollama
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn ollama_start_server(nixos_shell: &mut Session) -> Result<(), Error> {
@@ -54,9 +54,9 @@ fn ollama_start_server(nixos_shell: &mut Session) -> Result<(), Error> {
     Ok(())
 }
 
-// ============================================================================
+// ------
 // AI Coding Agents - Codex
-// ============================================================================
+// ------
 
 #[nixos_test]
 fn codex_show_help(nixos_shell: &mut Session) -> Result<(), Error> {
