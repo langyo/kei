@@ -331,16 +331,13 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
             ostd::info!("framebuffer published OK");
             crate::device::fb::register_late();
             ostd::info!("/dev/fb0 registered");
-            // Initialize the hardware cursor after the framebuffer is published.
             ostd::early_println!("[kthread] init hardware cursor");
             aster_virtio::aarch64_raw_gpu_probe::init_cursor();
         } else {
             ostd::info!("WARNING: framebuffer not published (no display)");
         }
-        // On real hardware with simple-framebuffer (mmio, no flush needed),
-        // initialize the framebuffer console for early boot output.
-        // On QEMU/virtio-gpu, fb_console::init() is intentionally skipped
-        // — flush_framebuffer() triggers DMAC that hangs QEMU TCG.
+        // On real hardware with simple-framebuffer, initialize the
+        // framebuffer console for early boot output.
         if aster_virtio::aarch64_raw_gpu_probe::framebuffer_info().is_none()
             && aster_framebuffer::framebuffer::get().is_some()
         {

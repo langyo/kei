@@ -1,0 +1,10 @@
+[package]
+name = "aster-display"
+version.workspace = true
+edition.workspace = true
+description = "Display driver abstraction with per-SoC implementations"
+license.workspace = true
+
+[dependencies]
+ostd = { workspace = true }
+aster-framebuffer = { workspace = true }

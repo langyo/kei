@@ -25,6 +25,8 @@ fn align_up(val: usize, align: usize) -> usize {
 /// Blink all three LEDs on NanoPi R3S (RK3566) to prove the kernel entered
 /// Rust code. GPIO addresses are from the board TOML config, compiled in
 /// via build.rs → board_config.rs.
+/// Blink all board LEDs on boot to prove the kernel entered Rust code.
+/// Uses the board_config.rs generated from TOML for GPIO addresses.
 #[cfg(not(feature = "cvm_guest"))]
 fn blink_led_rk3566() {
     include!("board_config.rs");
@@ -44,14 +46,12 @@ fn blink_led_rk3566() {
     let dr = gpio_reg::SWPORT_DR;
     const DELAY: usize = 2_000_000;
 
-    // Set all LEDs as outputs
     for led in LEDS {
         let base = paddr_to_vaddr(get_gpio_base(led.ctrl));
         let bit = 1u32 << led.pin;
         unsafe { core::ptr::write_volatile((base + ddr) as *mut u32, bit); }
     }
 
-    // Blink each LED once
     for led in LEDS {
         let base = paddr_to_vaddr(get_gpio_base(led.ctrl));
         let bit = 1u32 << led.pin;
@@ -61,6 +61,55 @@ fn blink_led_rk3566() {
         for _ in 0..DELAY { core::hint::spin_loop(); }
     }
 }
+
+/// Public LED debug signal (real hardware only). On QEMU/cvm_guest, no-op.
+/// Both LEDs blink together (separator), then WAN=N/10 times, LAN=N%10 times.
+#[cfg(not(feature = "cvm_guest"))]
+pub fn led_debug(code: u32) {
+    include!("board_config.rs");
+    let get_base = |name: &str| -> usize {
+        match name { "GPIO0" => gpio::GPIO0, "GPIO3" => gpio::GPIO3, _ => gpio::GPIO0 }
+    };
+    let ddr = gpio_reg::SWPORT_DDR;
+    let dr = gpio_reg::SWPORT_DR;
+    const D: usize = 400_000;
+    let wan = LEDS.iter().find(|l| l.name == "wan").map(|l| (get_base(l.ctrl), 1u32 << l.pin));
+    let lan = LEDS.iter().find(|l| l.name == "lan").map(|l| (get_base(l.ctrl), 1u32 << l.pin));
+    // Separator
+    for led in LEDS {
+        let (b, m) = (get_base(led.ctrl), 1u32 << led.pin);
+        unsafe { core::ptr::write_volatile((b + ddr) as *mut u32, m); }
+        unsafe { core::ptr::write_volatile((b + dr) as *mut u32, m); }
+        for _ in 0..D { core::hint::spin_loop(); }
+        unsafe { core::ptr::write_volatile((b + dr) as *mut u32, 0); }
+        for _ in 0..D { core::hint::spin_loop(); }
+    }
+    for _ in 0..D*3 { core::hint::spin_loop(); }
+    let tens = code / 10; let ones = code % 10;
+    if let Some((b, m)) = wan {
+        unsafe { core::ptr::write_volatile((b + ddr) as *mut u32, m); }
+        for _ in 0..tens {
+            unsafe { core::ptr::write_volatile((b + dr) as *mut u32, m); }
+            for _ in 0..D { core::hint::spin_loop(); }
+            unsafe { core::ptr::write_volatile((b + dr) as *mut u32, 0); }
+            for _ in 0..D/2 { core::hint::spin_loop(); }
+        }
+    }
+    for _ in 0..D { core::hint::spin_loop(); }
+    if let Some((b, m)) = lan {
+        unsafe { core::ptr::write_volatile((b + ddr) as *mut u32, m); }
+        for _ in 0..ones {
+            unsafe { core::ptr::write_volatile((b + dr) as *mut u32, m); }
+            for _ in 0..D { core::hint::spin_loop(); }
+            unsafe { core::ptr::write_volatile((b + dr) as *mut u32, 0); }
+            for _ in 0..D/2 { core::hint::spin_loop(); }
+        }
+    }
+    for _ in 0..D*3 { core::hint::spin_loop(); }
+}
+
+#[cfg(feature = "cvm_guest")]
+pub fn led_debug(_code: u32) {}
 
 global_asm!(include_str!("bsp_boot.S"));
 
