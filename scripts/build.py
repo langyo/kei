@@ -123,6 +123,11 @@ def main() -> int:
     cf.info(f"  Target: {rust_target}")
     cf.info(f"  Arch:   {arch}")
 
+    # Generate board_config.rs from TOML (GPIO, LEDs, serial, framebuffer)
+    gen_script = PROJECT_ROOT / "scripts" / "gen_board_config.py"
+    if gen_script.exists():
+        subprocess.run([sys.executable, str(gen_script)], cwd=PROJECT_ROOT, capture_output=True)
+
     # Ensure initramfs exists (cargo osdk build requires it)
     cf.blank()
     cf.step("[2/5] Preparing initramfs")
@@ -192,7 +197,7 @@ def main() -> int:
     dtc = shutil.which("dtc")
     dtb_name = config.get("kernel", {}).get("dtb", "")
     if dtc and dtb_name:
-        dtb_src = PROJECT_ROOT / "board" / board / "device-tree"
+        dtb_src = PROJECT_ROOT / "configs" / "board" / board / "device-tree"
         dts_files = list(dtb_src.glob("*.dts")) if dtb_src.exists() else []
         if dts_files:
             subprocess.run(
@@ -201,11 +206,20 @@ def main() -> int:
                  str(dts_files[0])],
                 check=False,
             )
-            cf.ok(f"  DTB: {output_dir / 'board.dtb'}")
+            if (output_dir / "board.dtb").exists():
+                cf.ok(f"  DTB: {output_dir / 'board.dtb'}")
+            else:
+                cf.warn("  DTB compilation failed")
         else:
             cf.info("  No .dts files found")
     else:
         cf.info("  (dtc not available or no DTB configured — skipping)")
+
+    # Copy armbianEnv.txt for SD card image builder
+    armbian_env = PROJECT_ROOT / "configs" / "board" / board / "armbianEnv.txt"
+    if armbian_env.exists():
+        shutil.copy2(armbian_env, output_dir / "armbianEnv.txt")
+        cf.ok(f"  armbianEnv.txt copied")
 
     cf.blank()
     cf.ok(f"Build complete: {output_dir}")

@@ -75,10 +75,8 @@ fn clear() {
 }
 
 fn draw_banner() {
-    // Print a colorful header using ANSI SGR to demonstrate color support.
-    // The SGR codes reference the One Half Dark palette (ported from kou).
-    print_str("\x1b[34m kei kernel (aarch64) \x1b[0m\n"); // Blue title
-    print_str("\x1b[36m virtio-gpu framebuffer console \x1b[0m\n\n"); // Cyan subtitle
+    print_str("\x1b[34m kei kernel (aarch64) \x1b[0m\n");
+    print_str("\x1b[36m framebuffer console \x1b[0m\n\n");
 }
 
 /// Public print: write a string with ANSI SGR color support, scroll if needed.

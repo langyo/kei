@@ -68,12 +68,39 @@ mod util;
 #[cfg(target_arch = "x86_64")]
 mod vbe_dispi;
 mod vga_text;
-/// Re-export of the raw virtio-gpu framebuffer accessors so the
-/// FramebufferConsole can read/flush the display without going through the
-/// component system (which isn't wired up on aarch64 yet).
+/// Framebuffer accessors for the early boot fb_console.
+/// Tries virtio-gpu raw probe (QEMU), then falls back to the published
+/// mmio framebuffer component (real hardware simple-framebuffer / ARMBian U-Boot).
 #[cfg(target_arch = "aarch64")]
 pub mod fb_gpu {
-    pub use aster_virtio::aarch64_raw_gpu_probe::{flush_framebuffer, framebuffer_info};
+    use aster_virtio::aarch64_raw_gpu_probe;
+
+    /// Kernel linear mapping base (VA = LINEAR_BASE + PA for first 4 GiB).
+    const LINEAR_BASE: usize = 0xffff_8000_0000_0000;
+
+    pub fn framebuffer_info() -> Option<(usize, u32, u32, u32)> {
+        // Check virtio-gpu first (QEMU).
+        if let Some((ptr, w, h, stride)) = aarch64_raw_gpu_probe::framebuffer_info() {
+            return Some((ptr as usize, w, h, stride as u32));
+        }
+
+        // Fallback to the published framebuffer component (simplefb / ARMBian U-Boot).
+        if let Some(fb) = aster_framebuffer::framebuffer::get() {
+            if let Some(phys) = fb.physical_address() {
+                let va = LINEAR_BASE + phys;
+                let width = fb.width() as u32;
+                let height = fb.height() as u32;
+                let stride = fb.line_size() as u32;
+                return Some((va, width, height, stride));
+            }
+        }
+        None
+    }
+
+    pub fn flush_framebuffer() {
+        // virtio-gpu: flush DMA buffer to host.
+        aarch64_raw_gpu_probe::flush_framebuffer();
+    }
 }
 // TODO: Add vDSO support for other architectures.
 #[cfg(any(target_arch = "x86_64", target_arch = "riscv64"))]

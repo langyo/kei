@@ -1,0 +1,6 @@
+verbosity=7
+console=both
+bootlogo=false
+extraargs=cma=256M
+overlay_prefix=rk35xx
+rootfstype=ext4

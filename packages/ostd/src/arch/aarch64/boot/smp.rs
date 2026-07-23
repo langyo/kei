@@ -175,41 +175,57 @@ fn collect_ap_mpidrs(bsp_mpidr: u64) -> alloc::vec::Vec<u64> {
 // ---------------------------------------------------------------------------
 
 unsafe fn fill_boot_info_ptr(info_ptr: *const PerApRawInfo) {
-    unsafe extern "C" {
-        static mut __ap_boot_info_array_pointer: *const PerApRawInfo;
-    }
+    // Use absolute addressing (movz+movk) instead of ADRP because
+    // __ap_boot_info_array_pointer is at a physical address while
+    // this code runs at kernel VMA — ADRP can't span ±4GB.
+    let ptr_addr: u64;
     unsafe {
-        __ap_boot_info_array_pointer = info_ptr;
+        core::arch::asm!(
+            "movz {0}, #:abs_g3:__ap_boot_info_array_pointer
+             movk {0}, #:abs_g2_nc:__ap_boot_info_array_pointer
+             movk {0}, #:abs_g1_nc:__ap_boot_info_array_pointer
+             movk {0}, #:abs_g0_nc:__ap_boot_info_array_pointer",
+            out(reg) ptr_addr,
+            options(pure, nomem, nostack),
+        );
     }
+    let ptr = ptr_addr as *mut *const PerApRawInfo;
+    unsafe { *ptr = info_ptr; }
 }
 
 unsafe fn fill_boot_page_table_ptr(pt_ptr: Paddr) {
-    unsafe extern "C" {
-        static mut __ap_boot_page_table_pointer: Paddr;
-    }
+    // Use absolute addressing (movz+movk) instead of ADRP — same reason.
+    let ptr_addr: u64;
     unsafe {
-        __ap_boot_page_table_pointer = pt_ptr;
+        core::arch::asm!(
+            "movz {0}, #:abs_g3:__ap_boot_page_table_pointer
+             movk {0}, #:abs_g2_nc:__ap_boot_page_table_pointer
+             movk {0}, #:abs_g1_nc:__ap_boot_page_table_pointer
+             movk {0}, #:abs_g0_nc:__ap_boot_page_table_pointer",
+            out(reg) ptr_addr,
+            options(pure, nomem, nostack),
+        );
     }
+    let ptr = ptr_addr as *mut Paddr;
+    unsafe { *ptr = pt_ptr; }
 }
 
 fn get_ap_boot_start_addr() -> Paddr {
-    // The kernel is linked at a high virtual address. The boot page table
-    // maps PA 0x40000000..0x50000000 at VA 0xffffffff40000000..0xffffffff50000000
-    // (L1 entry 509, 1 GiB block). The .ap_boot section lives inside this range.
-    // Convert the runtime VA (returned by adrp) to PA by subtracting the VA base
-    // and adding the PA base.
-    const KERNEL_VA_BASE: u64 = 0xffff_ffff_4000_0000;
-    const KERNEL_PA_BASE: u64 = 0x4000_0000;
+    // ap_boot_start is linked at a physical address (VMA == LMA, no offset).
+    // Since the calling code is at kernel VMA (~0xffff80004...), ADRP can't
+    // reach ±4GB. Use movz+movk to construct the absolute 64-bit address.
     let addr: u64;
     unsafe {
         core::arch::asm!(
-            "adrp {0}, ap_boot_start
-             add  {0}, {0}, #:lo12:ap_boot_start",
+            "movz {0}, #:abs_g3:ap_boot_start
+             movk {0}, #:abs_g2_nc:ap_boot_start
+             movk {0}, #:abs_g1_nc:ap_boot_start
+             movk {0}, #:abs_g0_nc:ap_boot_start",
             out(reg) addr,
             options(pure, nomem, nostack),
         );
     }
-    (addr - KERNEL_VA_BASE + KERNEL_PA_BASE) as Paddr
+    addr as Paddr
 }
 
 // ---------------------------------------------------------------------------

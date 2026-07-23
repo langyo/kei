@@ -1,4 +1,4 @@
-# NanoPi R3S — kei build configuration
+# NanoPi R3S — kei build & hardware configuration
 
 [board]
 name = "nanopi-r3s"
@@ -6,17 +6,94 @@ soc = "rk3566"
 arch = "aarch64"
 
 [kernel]
-# Upstream asterinas version
 asterinas_version = "0.18.0"
-
-# BSP crate to link
 bsp_crate = "bsp-rk3566"
-
-# Device tree source file (relative to board/nanopi-r3s/)
 dtb = "rk3566-nanopi-r3s"
-
-# Kernel features to enable
 features = ["aarch64", "rk3566"]
+
+# ── GPIO ────────────────────────────────────────────────────────────
+
+[gpio.controllers]
+GPIO0 = "0xFDD60000"
+GPIO1 = "0xFE740000"
+GPIO2 = "0xFE750000"
+GPIO3 = "0xFE760000"
+GPIO4 = "0xFE770000"
+
+[gpio.registers]
+SWPORT_DR   = "0x0000"
+SWPORT_DDR  = "0x0004"
+EXT_PORT    = "0x0050"
+
+# ── LEDs ────────────────────────────────────────────────────────────
+
+[[leds]]
+name = "power"
+gpio_controller = "GPIO3"
+gpio_pin = 18          # PC2 — actually power LED on some R3S revisions
+active_low = false
+
+[[leds]]
+name = "lan"
+gpio_controller = "GPIO3"
+gpio_pin = 19          # PC3
+active_low = false
+
+[[leds]]
+name = "wan"
+gpio_controller = "GPIO0"
+gpio_pin = 15          # PB7 — actually WAN LED on some R3S revisions
+active_low = false
+
+# ── Serial ──────────────────────────────────────────────────────────
+
+[serial]
+compatible = "snps,dw-apb-uart"
+uart2_base = "0xFE660000"
+reg_shift = 2
+reg_io_width = 4
+baud_rate = 1500000
+
+# Fallback for QEMU virt
+[serial.qemu]
+compatible = "arm,pl011"
+base = "0x09000000"
+
+# ── Framebuffer ─────────────────────────────────────────────────────
+
+[framebuffer]
+compatible = "simple-framebuffer"
+default_width = 1920
+default_height = 1080
+default_bpp = 32
+default_format = "a8r8g8b8"
+# U-Boot patches the actual address at boot via fdt set
+# Fallback if U-Boot doesn't set fb_base:
+fallback_address = "0x00000000"
+
+# ── Memory ──────────────────────────────────────────────────────────
+
+[memory]
+ram_start = "0x00200000"
+ram_size  = "0x7EE00000"
+kernel_load_address = "0x40080000"
+kernel_vma_base = "0xffff800000000000"
+
+# ── Interrupts ──────────────────────────────────────────────────────
+
+[interrupts]
+gic_base = "0xFD400000"
+gic_size = "0x20000"
+
+# ── Boot ────────────────────────────────────────────────────────────
+
+[boot]
+kernel_addr_r = "0x40080000"
+fdt_addr_r    = "0x50000000"
+ramdisk_addr_r = "0x51000000"
+bootargs = "console=ttyS2,1500000n8 earlycon init=/bin/sh"
+
+# ── QEMU (for testing) ──────────────────────────────────────────────
 
 [qemu]
 machine = "virt"

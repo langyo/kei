@@ -77,6 +77,15 @@ echo "=== kei ignition ==="
 echo "Kernel booted successfully"
 echo ""
 
+# Write boot banner to framebuffer if available
+if [ -w /dev/fb0 ]; then
+    printf "\\033[2J\\033[H" > /dev/fb0 2>/dev/null
+    echo "=== kei OS ===" > /dev/fb0 2>/dev/null
+    echo "NanoPi R3S" > /dev/fb0 2>/dev/null
+    echo "" > /dev/fb0 2>/dev/null
+    echo "Kernel booted successfully" > /dev/fb0 2>/dev/null
+fi
+
 # Detect network interfaces (the ignition test checks for these)
 echo "Network interfaces:"
 for iface in /sys/class/net/*; do

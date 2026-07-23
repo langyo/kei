@@ -6,22 +6,22 @@ use alloc::sync::Arc;
 use core::fmt::Display;
 
 #[cfg(target_arch = "aarch64")]
-use ostd::arch::serial::{pl011_recv_byte, pl011_send_byte};
+use ostd::arch::serial::{uart_recv_byte, uart_send_byte};
 use ostd::mm::{FallibleVmRead, FallibleVmWrite};
 
 /// Writes one byte to the debug serial console.
 ///
-/// aarch64 uses the PL011 UART MMIO; riscv64 goes through the SBI console
-/// (the same backend as `ostd::early_print!`).
+/// aarch64 uses the detected UART (PL011, DW 8250, etc.); riscv64 goes through
+/// the SBI console (the same backend as `ostd::early_print!`).
 #[cfg(target_arch = "aarch64")]
 fn serial_send_byte(byte: u8) {
-    pl011_send_byte(byte);
+    uart_send_byte(byte);
 }
 
 /// Reads one byte from the debug serial console, if available.
 #[cfg(target_arch = "aarch64")]
 fn serial_recv_byte() -> Option<u8> {
-    pl011_recv_byte()
+    uart_recv_byte()
 }
 
 #[cfg(target_arch = "riscv64")]

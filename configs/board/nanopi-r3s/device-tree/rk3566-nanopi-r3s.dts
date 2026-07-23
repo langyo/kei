@@ -1,31 +1,109 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/*
+ * Device tree for FriendlyElec NanoPi R3S (Rockchip RK3566).
+ *
+ * Standalone DTS — compiles with dtc, no Linux kernel includes required.
+ * Describes real hardware for kei OS kernel boot via U-Boot.
+ */
 /dts-v1/;
 
 / {
-	model = "FriendlyELEC NanoPi R3S (kei)";
-	compatible = "friendlyelec,nanopi-r3s", "rockchip,rk3566";
-
 	#address-cells = <2>;
 	#size-cells = <2>;
-
+	model = "FriendlyElec NanoPi R3S";
+	compatible = "friendlyarm,nanopi-r3s", "rockchip,rk3566";
 	chosen {
 		bootargs = "console=ttyS2,1500000n8 earlycon";
 		stdout-path = "serial2:1500000n8";
 	};
 
-	memory@0 {
+	memory@a00000 {
 		device_type = "memory";
-		reg = <0x0 0x00000000 0x0 0x80000000>;
+		reg = <0x0 0x00200000 0x0 0x7ee00000>;
 	};
 
 	cpus {
-		#address-cells = <1>;
+		#address-cells = <2>;
 		#size-cells = <0>;
 
-		cpu@0 {
+		cpu-map {
+			cluster0 {
+				core0 { cpu = <&cpu0>; };
+				core1 { cpu = <&cpu1>; };
+				core2 { cpu = <&cpu2>; };
+				core3 { cpu = <&cpu3>; };
+			};
+		};
+
+		cpu0: cpu@0 {
 			device_type = "cpu";
 			compatible = "arm,cortex-a55";
-			reg = <0x0>;
+			reg = <0x0 0x0>;
 			enable-method = "psci";
+		};
+
+		cpu1: cpu@100 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a55";
+			reg = <0x0 0x100>;
+			enable-method = "psci";
+		};
+
+		cpu2: cpu@200 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a55";
+			reg = <0x0 0x200>;
+			enable-method = "psci";
+		};
+
+		cpu3: cpu@300 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a55";
+			reg = <0x0 0x300>;
+			enable-method = "psci";
+		};
+	};
+
+	psci {
+		compatible = "arm,psci-1.0", "arm,psci-0.2";
+		method = "smc";
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupt-parent = <&intc>;
+		interrupts = <1 13 0xf08>,
+			     <1 14 0xf08>,
+			     <1 11 0xf08>,
+			     <1 10 0xf08>;
+		clock-frequency = <24000000>;
+	};
+
+	intc: interrupt-controller@fd400000 {
+		compatible = "arm,gic-v3";
+		#interrupt-cells = <3>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		interrupt-controller;
+		reg = <0x0 0xfd400000 0x0 0x10000>,
+		      <0x0 0xfd460000 0x0 0x80000>;
+	};
+
+	soc {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		compatible = "simple-bus";
+		ranges;
+
+		uart2: serial@fe660000 {
+			compatible = "rockchip,rk3568-uart", "snps,dw-apb-uart";
+			reg = <0x0 0xfe660000 0x0 0x100>;
+			interrupt-parent = <&intc>;
+			interrupts = <0 136 4>;
+			reg-shift = <2>;
+			reg-io-width = <4>;
+			status = "okay";
 		};
 	};
 };

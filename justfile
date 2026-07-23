@@ -667,6 +667,37 @@ list-arch:
     @echo "  just log-follow    Follow boot log live"
     @echo ""
 
+# ── SD Card Image (Real Hardware) ──────────────────────────
+#
+# Build a bootable SD card image for the target board.
+# Requires an Armbian reference image for U-Boot.
+#
+# Usage:
+#   just image ARMBIAN_IMG=/path/to/armbian.img
+#
+# Example:
+#   just image ARMBIAN_IMG=Armbian_26.5.1_Nanopi-r3s-lts_trixie_current_6.18.33_minimal.img
+
+image ARMBIAN_IMG="" BOARD="nanopi-r3s":
+    @if [ -z "{{ARMBIAN_IMG}}" ]; then \
+        echo "Usage: just image ARMBIAN_IMG=/path/to/armbian.img [BOARD=nanopi-r3s]"; \
+        echo ""; \
+        echo "The Armbian image provides U-Boot (sector 64-32767) required for"; \
+        echo "Rockchip BootROM to start the device. The resulting sdcard.img"; \
+        echo "contains kei kernel + DTB + initramfs in a single boot partition."; \
+        echo ""; \
+        echo "Download: https://www.armbian.com/nanopi-r3s/"; \
+        exit 1; \
+    fi
+    just build board {{BOARD}}
+    {{python_cmd}} scripts/make_sdcard.py {{BOARD}} --armbian-image "{{ARMBIAN_IMG}}"
+
+# Build everything and create the SD card image (one-shot).
+# just image-all ARMBIAN_IMG=/path/to/armbian.img
+
+image-all ARMBIAN_IMG="" BOARD="nanopi-r3s":
+    @just image ARMBIAN_IMG="{{ARMBIAN_IMG}}" BOARD="{{BOARD}}"
+
 clean:
     rm -rf build/ output/
     cargo clean

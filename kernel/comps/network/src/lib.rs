@@ -168,14 +168,17 @@ pub fn all_devices() -> Vec<(String, NetworkDeviceRef)> {
 }
 
 static COMPONENT: Once<Component> = Once::new();
+static NETWORK_INIT_DONE: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
 #[init_component]
 fn init() -> Result<(), ComponentInitError> {
     let component = Component::init()?;
     COMPONENT.call_once(|| component);
 
-    SoftIrqLine::get(NETWORK_TX_SOFTIRQ_ID).enable(handle_tx_softirq);
-    SoftIrqLine::get(NETWORK_RX_SOFTIRQ_ID).enable(handle_rx_softirq);
+    if !NETWORK_INIT_DONE.swap(true, core::sync::atomic::Ordering::AcqRel) {
+        SoftIrqLine::get(NETWORK_TX_SOFTIRQ_ID).enable(handle_tx_softirq);
+        SoftIrqLine::get(NETWORK_RX_SOFTIRQ_ID).enable(handle_rx_softirq);
+    }
 
     Ok(())
 }
@@ -185,8 +188,10 @@ pub fn init_component_fn() -> Result<(), ComponentInitError> {
     let component = Component::init()?;
     COMPONENT.call_once(|| component);
 
-    SoftIrqLine::get(NETWORK_TX_SOFTIRQ_ID).enable(handle_tx_softirq);
-    SoftIrqLine::get(NETWORK_RX_SOFTIRQ_ID).enable(handle_rx_softirq);
+    if !NETWORK_INIT_DONE.swap(true, core::sync::atomic::Ordering::AcqRel) {
+        SoftIrqLine::get(NETWORK_TX_SOFTIRQ_ID).enable(handle_tx_softirq);
+        SoftIrqLine::get(NETWORK_RX_SOFTIRQ_ID).enable(handle_rx_softirq);
+    }
 
     Ok(())
 }

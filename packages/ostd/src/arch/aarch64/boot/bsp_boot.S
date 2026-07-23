@@ -61,8 +61,10 @@ actual_entry:
     and     x1, x1, #0xC           // Extract EL bits
     cmp     x1, #0x8               // EL2?
     b.eq    el2_setup
+    cmp     x1, #0x4               // EL1?
+    b.eq    el1_entry              // EL1: skip EL2 setup, go direct
 
-    // If not EL2, hang (we only support EL2 boot)
+    // If not EL2 or EL1, hang
 el_hang:
     wfi
     b       el_hang
@@ -126,6 +128,15 @@ el2_setup:
     mov     sp, x2
 
     eret                             // Transition to EL1, execution continues at el1_setup
+
+el1_entry:
+    // Entered at EL1 directly (some U-Boot / firmware configs do this).
+    // Set up the boot stack (identity-mapped, physical address).
+    // x0 still holds FDT address, preserved from bootloader.
+    adrp    x2, boot_stack_top
+    add     x2, x2, #:lo12:boot_stack_top
+    mov     sp, x2
+    // Fall through to el1_setup
 
 el1_setup:
     // Enable FP/SIMD access at EL1 (CPACR_EL1.FPEN = 0b11, bits 21:20)
@@ -285,9 +296,11 @@ boot_l0_pt:
 .balign 4096
 boot_l1_pt_identity:
     // L1 table for identity mapping (512 entries, each covers 1GB)
-    // Entry 0: PA 0x00000000 -> VA 0x00000000 (device)
-    // Covers UART at 0x09000000, GIC, etc.
-    .quad 0x00000701
+    // Entry 0: PA 0x00000000 -> VA 0x00000000 (normal)
+    // On QEMU virt, RAM starts at 0x40000000 (UART at 0x09000000 works
+    // fine with normal attributes in QEMU). On real HW (RK3566 etc.),
+    // RAM starts at 0x00200000 — normal is required for code execution.
+    .quad 0x00000709
     // Entry 1: PA 0x40000000 -> VA 0x40000000 (normal)
     // Kernel RAM region - MUST use normal memory for code execution
     // New KERNEL_LMA: 0x40080000 (still within this 1GB block)

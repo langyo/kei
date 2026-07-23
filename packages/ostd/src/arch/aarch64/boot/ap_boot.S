@@ -88,8 +88,12 @@ ap_boot_virt:
 
     // Atomically increment the CPU ID counter and get our ID.
     // CPU ID 0 is the BSP; APs get 1, 2, 3, ...
-    adrp    x0, __ap_boot_cpu_id_tail
-    add     x0, x0, #:lo12:__ap_boot_cpu_id_tail
+    // Use absolute addressing (movz+movk) because __ap_boot_cpu_id_tail
+    // is in the .ap_boot section (LMA) while this code is in .text (VMA).
+    movz    x0, #:abs_g3:__ap_boot_cpu_id_tail
+    movk    x0, #:abs_g2_nc:__ap_boot_cpu_id_tail
+    movk    x0, #:abs_g1_nc:__ap_boot_cpu_id_tail
+    movk    x0, #:abs_g0_nc:__ap_boot_cpu_id_tail
     mov     x3, x0                      // Save address for retry loop.
 ap_cmpxchg_load:
     ldxr    x1, [x0]                    // Load current tail.
@@ -100,8 +104,11 @@ ap_cmpxchg_load:
     // x1 = our CPU ID (1, 2, 3, ...).
 
     // Get the AP boot info array pointer.
-    adrp    x2, __ap_boot_info_array_pointer
-    add     x2, x2, #:lo12:__ap_boot_info_array_pointer
+    // Use absolute addressing (movz+movk) — same reason.
+    movz    x2, #:abs_g3:__ap_boot_info_array_pointer
+    movk    x2, #:abs_g2_nc:__ap_boot_info_array_pointer
+    movk    x2, #:abs_g1_nc:__ap_boot_info_array_pointer
+    movk    x2, #:abs_g0_nc:__ap_boot_info_array_pointer
     ldr     x2, [x2]                    // Load pointer to PerApRawInfo array.
 
     // Each PerApRawInfo is 16 bytes (2 × 8-byte pointers).

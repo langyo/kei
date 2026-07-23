@@ -107,6 +107,7 @@ default-members = [
 # Their crate-level `Cargo.toml` files are not affected
 # by the shared in-kernel workspace configuration.
 exclude = [
+    "target",
     "kernel/libs/comp-sys/cargo-component",
     "kernel/libs/comp-sys/component",
     "kernel/libs/comp-sys/component-macro",

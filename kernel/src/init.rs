@@ -307,7 +307,10 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
     #[cfg(target_arch = "aarch64")]
     {
         ostd::info!("explicit component init for net stack");
-        let _ = aster_softirq::init_component_fn();
+        // softirq is already initialized during component::init_all(Bootstrap)
+        // on aarch64. Calling init_component_fn() a second time panics with
+        // "assertion failed: !self.is_enabled()".
+        // let _ = aster_softirq::init_component_fn();
         let _ = aster_console::init_component_fn();
         let _ = aster_framebuffer::init_component_fn();
         // Initialize the input core first (creates InputCore singleton),
@@ -332,16 +335,19 @@ fn init_in_first_kthread(path_resolver: &PathResolver) {
             ostd::early_println!("[kthread] init hardware cursor");
             aster_virtio::aarch64_raw_gpu_probe::init_cursor();
         } else {
-            ostd::info!("WARNING: framebuffer not published");
+            ostd::info!("WARNING: framebuffer not published (no display)");
         }
-        // Note: even without publish, the GPU probe has already set up the
-        // scanout with the framebuffer resource. The display shows whatever
-        // is in the DMA buffer.
-
-        // NOTE: fb_console::init() is intentionally NOT called. It triggers
-        // flush_framebuffer() which sends TRANSFER_TO_HOST_2D commands that
-        // hang QEMU TCG after the initial GPU setup. The screen stays black
-        // until user-space aris-render writes to /dev/fb0.
+        // On real hardware with simple-framebuffer (mmio, no flush needed),
+        // initialize the framebuffer console for early boot output.
+        // On QEMU/virtio-gpu, fb_console::init() is intentionally skipped
+        // — flush_framebuffer() triggers DMAC that hangs QEMU TCG.
+        if aster_virtio::aarch64_raw_gpu_probe::framebuffer_info().is_none()
+            && aster_framebuffer::framebuffer::get().is_some()
+        {
+            ostd::info!("simplefb detected: initializing framebuffer console");
+            crate::fb_console::init();
+            ostd::info!("framebuffer console initialized");
+        }
 
         ostd::info!("net::init (deferred)");
         crate::net::init();

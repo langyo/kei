@@ -1,8 +1,27 @@
-# An empty workspace table keeps the base crate away from nesting in other
-# workspaces.
 [workspace]
 
+# An empty workspace table keeps the base crate away from nesting in other
+# workspaces.
 [package]
 name = "#NAME#"
 version = "#VERSION#"
 edition = "2024"
+
+[patch.crates-io]
+ostd = { path = "/mnt/codespace/kei/packages/ostd" }
+ostd-pod = { path = "/mnt/codespace/kei/packages/ostd/libs/ostd-pod" }
+ostd-macros = { path = "/mnt/codespace/kei/packages/ostd/libs/ostd-macros" }
+ostd-test = { path = "/mnt/codespace/kei/packages/ostd/libs/ostd-test" }
+
+[profile.release]
+lto = false
+panic = "unwind"
+
+[profile.dev]
+panic = "unwind"
+
+[profile.release-lto]
+inherits = "release"
+lto = true
+panic = "abort"
+codegen-units = 1

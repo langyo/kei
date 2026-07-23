@@ -1,34 +1,33 @@
 // SPDX-License-Identifier: MPL-2.0
 
-//! PL011 UART console registration for aarch64.
+//! Multi-UART console registration for aarch64.
 //!
-//! Registers the PL011 UART (at 0x09000000 on QEMU virt) as a console
-//! device with `aster_console`, enabling user-space TTY output via
-//! /dev/ttyS0.
+//! Auto-detects the UART type (PL011 / DW 8250) from the ostd serial
+//! module and registers the appropriate console device with `aster_console`,
+//! enabling user-space TTY output via /dev/ttyS0.
 
 use alloc::{string::ToString, sync::Arc, vec::Vec};
 
 use aster_console::{AnyConsoleDevice, ConsoleCallback};
 use ostd::{
-    arch::serial::{pl011_recv_byte, pl011_send_byte},
-    mm::VmReader,
+    arch::serial::{uart_recv_byte, uart_send_byte},
     sync::{LocalIrqDisabled, SpinLock},
 };
 
 use crate::CONSOLE_NAME;
 
-/// A PL011 UART console device.
-pub(super) struct Pl011Console {
+/// A generic UART console device (works with PL011, DW 8250, etc.).
+pub(super) struct UartConsole {
     callbacks: SpinLock<Vec<&'static ConsoleCallback>, LocalIrqDisabled>,
 }
 
-impl core::fmt::Debug for Pl011Console {
+impl core::fmt::Debug for UartConsole {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("Pl011Console").finish_non_exhaustive()
+        f.debug_struct("UartConsole").finish_non_exhaustive()
     }
 }
 
-impl Pl011Console {
+impl UartConsole {
     pub(super) fn new() -> Arc<Self> {
         Arc::new(Self {
             callbacks: SpinLock::new(Vec::new()),
@@ -36,14 +35,13 @@ impl Pl011Console {
     }
 }
 
-impl AnyConsoleDevice for Pl011Console {
+impl AnyConsoleDevice for UartConsole {
     fn send(&self, buf: &[u8]) {
         for &byte in buf {
-            // Translate \n → \r\n for terminal compatibility
             if byte == b'\n' {
-                pl011_send_byte(b'\r');
+                uart_send_byte(b'\r');
             }
-            pl011_send_byte(byte);
+            uart_send_byte(byte);
         }
     }
 
@@ -53,9 +51,13 @@ impl AnyConsoleDevice for Pl011Console {
 }
 
 pub(super) fn init() {
-    // The PL011 UART is already initialized by OSTD's early serial init.
-    // We just need to register it as a console device.
-    let console = Pl011Console::new();
+    let uart_type = ostd::arch::serial::uart_kind();
+    let console = UartConsole::new();
     aster_console::register_device(CONSOLE_NAME.to_string(), console);
-    ostd::info!("Registered PL011 UART as console");
+    let type_str = match uart_type {
+        Some(ostd::arch::serial::UartKind::Pl011) => "PL011",
+        Some(ostd::arch::serial::UartKind::Dw8250 { .. }) => "DW8250",
+        None => "unknown",
+    };
+    ostd::info!("Registered {} UART as console", type_str);
 }
