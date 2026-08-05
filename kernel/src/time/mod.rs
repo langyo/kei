@@ -45,8 +45,23 @@ pub(super) fn init() {
     }
     #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
     {
+        // Wire up a real clocksource (architected timer on aarch64) before
+        // the clock singletons are initialized, so CLOCK_MONOTONIC actually
+        // advances and nanosleep/timers fire. Without it, read_time() returns
+        // a frozen default and sleeping syscalls hang forever.
+        aster_time::init_clocksource_no_component();
         system_time::init_no_rtc();
         clocks::init_no_rtc();
+        #[cfg(target_arch = "aarch64")]
+        {
+            // Register the timer tick → softirq → timeout-expiry chain so
+            // that sleeping syscalls (nanosleep etc.) actually wake up. The
+            // softirq component is initialized via component::init_all on
+            // this boot path; only the kernel-side registration was skipped.
+            // (riscv64 keeps skipping it: the softirq path can hit the
+            // core::unicode::conversions div-by-zero panic there.)
+            softirq::init();
+        }
         ostd::early_println!("[time] init_no_rtc done (clocks set to defaults)");
     }
     cpu_time_stats::init();

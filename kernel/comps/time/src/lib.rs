@@ -38,6 +38,14 @@ fn time_init() -> Result<(), ComponentInitError> {
     Ok(())
 }
 
+/// Initializes the clocksource on boot paths where the inventory-based
+/// component system is bypassed (aarch64/riscv64 qemu-direct). The counter
+/// (CNTPCT_EL0 via ostd's architected timer) is real, so monotonic time
+/// advances and timers fire; the wall clock stays at the default epoch.
+pub fn init_clocksource_no_component() {
+    tsc::init_no_rtc();
+}
+
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct SystemTime {
     pub year: u16,

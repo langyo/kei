@@ -14,6 +14,24 @@ echo "=== kei ignition (aarch64) ==="
 echo "Kernel booted successfully"
 echo ""
 
+echo "testing ls /proc"
+ls /proc
+echo "testing echo"
+echo "hello from busybox"
+echo "testing sleep"
+sleep 1
+echo "sleep done"
+echo "testing mkdir"
+mkdir /tmp/testdir
+ls /tmp
+echo "testing fork/exec loop"
+i=0
+while [ $i -lt 3 ]; do
+  echo "loop iteration $i"
+  i=$((i+1))
+  sleep 1
+done
+echo "ALL TESTS DONE"
 echo "Boot complete. Spawning shell on console."
 if [ "$#" -eq 0 ]; then
     set -- /bin/sh

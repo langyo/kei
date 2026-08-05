@@ -105,6 +105,14 @@ fn copy_iovs_and_convert<'a, T: 'a>(
         }
         max_len -= iov.len;
 
+        // A NULL base with a non-zero length is a user-space fault, not an
+        // empty buffer: Linux returns EFAULT here, and treating it as empty
+        // makes writev return 0, which trips up libc loops (musl's
+        // __stdio_write retries forever on a 0 return).
+        if iov.base == 0 && iov.len > 0 {
+            return_errno_with_message!(Errno::EFAULT, "the I/O buffer base is NULL");
+        }
+
         if iov.is_empty() {
             continue;
         }

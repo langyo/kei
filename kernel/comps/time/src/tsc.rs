@@ -28,6 +28,16 @@ pub(super) fn init() {
     init_timer();
 }
 
+/// Initializes the clocksource without RTC calibration.
+///
+/// Used on boot paths where the RTC driver component is not wired up (e.g.
+/// aarch64 qemu-direct): the counter is real (CNTPCT_EL0 via ostd) but the
+/// wall-clock start time stays at the default epoch.
+pub(super) fn init_no_rtc() {
+    init_clock();
+    init_timer();
+}
+
 fn init_clock() {
     CLOCK.call_once(|| {
         Arc::new(ClockSource::new(

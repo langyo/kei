@@ -252,6 +252,14 @@ run_user_entry:
     // until the very end. x27 is restored together with x28.
     //
     // Offsets match kernel_entry save layout:
+    // Restore user stack pointer FIRST, using x1 as a scratch register
+    // BEFORE x1 is restored from context (otherwise the user's x1 would be
+    // clobbered with the stack pointer — musl reads TPIDR into x1 and later
+    // writes through it, which corrupted the stack frame and caused a
+    // jump-to-stack).
+    ldr     x1,  [x28, #0xF8]             // Load user stack pointer
+    msr     sp_el0, x1                    // Set SP_EL0 for user mode
+
     //   stp xN, xN+1, [sp, #16*K]  =>  offset = K*16
     ldp     x1, x2,   [x28, #0x08]
     ldp     x3, x4,   [x28, #0x18]
@@ -267,10 +275,8 @@ run_user_entry:
     ldp     x23, x24, [x28, #0xB8]
     ldp     x25, x26, [x28, #0xC8]
 
-    // Restore x30 (LR) and user SP from context
+    // Restore x30 (LR) from context
     ldr     x30, [x28, #0xF0]             // Restore x30 (LR)
-    ldr     x1,  [x28, #0xF8]             // Load user stack pointer
-    msr     sp_el0, x1                    // Set SP_EL0 for user mode
 
     // Load x0 from context
     ldr     x0,  [x28, #0x00]
